@@ -1,3 +1,5 @@
+import type React from 'react'
+
 const changelog = [
   {
     title: 'Initial Release',

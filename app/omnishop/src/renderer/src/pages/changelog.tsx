@@ -26,7 +26,7 @@ export default function ChangelogPage(): React.JSX.Element {
     */
 
     // Mock response to mimic sanity response mappings
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setCategories([
         {
           title: 'Version History',
@@ -47,6 +47,7 @@ export default function ChangelogPage(): React.JSX.Element {
       ])
       setLoading(false)
     }, 500)
+    return () => clearTimeout(timer)
   }, [])
 
   return (

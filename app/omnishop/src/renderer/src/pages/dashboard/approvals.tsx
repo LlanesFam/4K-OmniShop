@@ -69,6 +69,12 @@ export default function ApprovalsPage(): React.JSX.Element {
   const [actionLoading, setActionLoading] = useState(false)
 
   useEffect(() => {
+    // Only subscribe when the current user is confirmed admin; prevents permission
+    // errors and data leakage for non-admin sessions.
+    if (adminProfile?.role !== 'admin') {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const unsub = subscribeToPendingUsers(
       (users) => {
@@ -81,7 +87,7 @@ export default function ApprovalsPage(): React.JSX.Element {
       }
     )
     return () => unsub()
-  }, [])
+  }, [adminProfile?.role])
 
   // ── Guard ──
   if (adminProfile?.role !== 'admin') {

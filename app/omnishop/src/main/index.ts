@@ -40,9 +40,29 @@ function startStaticServer(dir: string): Promise<number> {
       let urlPath = (req.url ?? '/').split('?')[0]
       if (urlPath === '/') urlPath = '/index.html'
 
+      // Guard against malformed percent-encoding — decodeURIComponent throws on
+      // invalid sequences (e.g. /%E0%A4%A). Fall back to index.html on error.
+      let decodedPath: string
+      try {
+        decodedPath = decodeURIComponent(urlPath)
+      } catch {
+        const fallback = join(dir, 'index.html')
+        const fallbackContentType = MIME_TYPES['.html']
+        fs.readFile(fallback, (err, data) => {
+          if (err) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' })
+            res.end('Not found')
+            return
+          }
+          res.writeHead(200, { 'Content-Type': fallbackContentType })
+          res.end(data)
+        })
+        return
+      }
+
       // Guard against path traversal attacks (e.g. /../sensitive-file).
       // Resolve to an absolute path and confirm it stays within the renderer dir.
-      const abs = resolvePath(join(dir, normalize(decodeURIComponent(urlPath))))
+      const abs = resolvePath(join(dir, normalize(decodedPath)))
       const isSafe = abs === dir || abs.startsWith(dir + sep)
 
       // SPA fallback — unknown or unsafe paths serve index.html for client-side routing
@@ -107,7 +127,10 @@ function createWindow(): void {
           width: 500,
           height: 700,
           webPreferences: {
-            sandbox: true
+            sandbox: true,
+            // Use a dedicated in-memory partition so CSP overrides on this popup's
+            // session don't affect the main window's default session handlers.
+            partition: 'partition:oauth'
           }
         }
       }
@@ -238,8 +261,10 @@ app.whenReady().then(() => {
 
   createWindow()
 
-  // Auto Updater
-  autoUpdater.checkForUpdatesAndNotify()
+  // Auto Updater: only check for updates in packaged, non-dev builds
+  if (!is.dev && app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify()
+  }
 
   autoUpdater.on('error', (message) => {
     console.error('There was a problem updating the application')
