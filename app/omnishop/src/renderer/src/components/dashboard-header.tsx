@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useLocation } from 'react-router-dom'
-import { Monitor, Moon, Sun } from 'lucide-react'
+import { Monitor, Moon, PowerOff, Sun } from 'lucide-react'
 
 import { type Theme, useThemeStore } from '@/store/useThemeStore'
 import { SidebarTrigger } from '@/components/ui/sidebar'
@@ -14,6 +14,16 @@ import {
   BreadcrumbSeparator
 } from '@/components/ui/breadcrumb'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 
 // ── Route map ─────────────────────────────────────────────────────────────────
@@ -110,49 +120,94 @@ function ThemeCycleButton(): React.JSX.Element {
 export function DashboardHeader(): React.JSX.Element {
   const { pathname } = useLocation()
   const { date, time } = useClock()
+  const [showQuitConfirm, setShowQuitConfirm] = React.useState(false)
 
   const route = ROUTE_MAP[pathname] ?? { group: null, title: 'Dashboard' }
 
   return (
-    <header className="flex h-12 w-full shrink-0 items-center gap-2 border-b bg-muted px-4">
-      {/* Sidebar toggle */}
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="h-4" />
+    <>
+      <header className="flex h-12 w-full shrink-0 items-center gap-2 border-b bg-muted px-4">
+        {/* Sidebar toggle */}
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="h-4" />
 
-      {/* Breadcrumbs */}
-      <Breadcrumb>
-        <BreadcrumbList>
-          {route.group && (
-            <>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  {/* Group label is not a navigable route — render as plain text */}
-                  <span className="text-muted-foreground">{route.group}</span>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-            </>
-          )}
-          <BreadcrumbItem>
-            <BreadcrumbPage>{route.title}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+        {/* Breadcrumbs */}
+        <Breadcrumb>
+          <BreadcrumbList>
+            {route.group && (
+              <>
+                <BreadcrumbItem>
+                  <BreadcrumbLink asChild>
+                    {/* Group label is not a navigable route — render as plain text */}
+                    <span className="text-muted-foreground">{route.group}</span>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+              </>
+            )}
+            <BreadcrumbItem>
+              <BreadcrumbPage>{route.title}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
 
-      {/* Spacer */}
-      <div className="flex-1" />
+        {/* Spacer */}
+        <div className="flex-1" />
 
-      {/* Date & time */}
-      <div className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
-        <span>{date}</span>
-        <Separator orientation="vertical" className="mx-1 h-3" />
-        <span className="tabular-nums">{time}</span>
-      </div>
+        {/* Date & time */}
+        <div className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
+          <span>{date}</span>
+          <Separator orientation="vertical" className="mx-1 h-3" />
+          <span className="tabular-nums">{time}</span>
+        </div>
 
-      <Separator orientation="vertical" className="hidden h-4 sm:block" />
+        <Separator orientation="vertical" className="hidden h-4 sm:block" />
 
-      {/* Quick theme cycle */}
-      <ThemeCycleButton />
-    </header>
+        {/* Quick theme cycle */}
+        <ThemeCycleButton />
+
+        <Separator orientation="vertical" className="h-4" />
+
+        {/* Quit */}
+        <TooltipProvider delayDuration={400}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setShowQuitConfirm(true)}
+                className={cn(
+                  'flex size-8 items-center justify-center rounded-md text-muted-foreground',
+                  'transition-colors hover:bg-destructive/10 hover:text-destructive'
+                )}
+                aria-label="Quit app"
+              >
+                <PowerOff className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Quit OmniShop</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </header>
+
+      {/* ── Quit confirmation ── */}
+      <AlertDialog open={showQuitConfirm} onOpenChange={setShowQuitConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quit OmniShop?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close the application?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => window.api.quitApp()}
+            >
+              Quit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

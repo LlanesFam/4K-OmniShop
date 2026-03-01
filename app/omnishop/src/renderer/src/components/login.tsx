@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, PowerOff } from 'lucide-react'
 
 import { useAuthStore } from '@/store/useAuthStore'
 import { useResolvedTheme } from '@/store/useThemeStore'
@@ -21,6 +21,16 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Logo } from '@/components/ui/logo'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -78,6 +88,7 @@ export default function Login(): React.JSX.Element {
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false)
   const [showReset, setShowReset] = useState(false)
   const [resetSent, setResetSent] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
@@ -160,6 +171,15 @@ export default function Login(): React.JSX.Element {
 
   return (
     <div className="relative flex min-h-screen overflow-hidden bg-background">
+      {/* ── Quit button ── */}
+      <button
+        onClick={() => setShowQuitConfirm(true)}
+        title="Quit OmniShop"
+        className="absolute right-4 top-4 z-50 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+        aria-label="Quit app"
+      >
+        <PowerOff className="size-4" />
+      </button>
       <Particles
         className="absolute inset-0"
         quantity={80}
@@ -171,7 +191,9 @@ export default function Login(): React.JSX.Element {
         <div className="w-full max-w-sm">
           {/* Branding */}
           <div className="mb-8 flex flex-col items-center gap-3">
-            <Logo className="size-10" />
+            <Link to="/" aria-label="Go to home">
+              <Logo className="size-10 transition-opacity hover:opacity-75" />
+            </Link>
             <div className="text-center">
               <h1 className="text-2xl font-bold tracking-tight">
                 {showReset ? 'Reset your password' : 'Welcome back'}
@@ -351,11 +373,36 @@ export default function Login(): React.JSX.Element {
         </div>
       </div>
 
+      {/* ── Quit confirmation ── */}
+      <AlertDialog open={showQuitConfirm} onOpenChange={setShowQuitConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quit OmniShop?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close the application?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => window.api.quitApp()}
+            >
+              Quit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Right panel (decorative) ── */}
       <div className="hidden lg:flex lg:w-1/2 items-center justify-center bg-muted border-l">
         <div className="flex flex-col items-center gap-4 p-12 text-center max-w-sm">
-          <Logo className="size-20 rounded-2xl shadow-lg" />
-          <h2 className="text-xl font-bold">OmniShop</h2>
+          <Link to="/" aria-label="Go to home">
+            <Logo className="size-20 rounded-2xl shadow-lg transition-opacity hover:opacity-75" />
+          </Link>
+          <Link to="/" className="text-xl font-bold hover:underline underline-offset-4">
+            OmniShop
+          </Link>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Your offline-first point-of-sale and store manager. Works without internet. Syncs when
             you&apos;re back online.

@@ -1,8 +1,66 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session, screen } from 'electron'
-import { join } from 'path'
+import { join, extname } from 'path'
+import http from 'http'
+import fs from 'fs'
+import type { AddressInfo } from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { autoUpdater } from 'electron-updater'
+
+// ─── Localhost Static Server (Firebase Auth Fix) ──────────────────────────────
+// In production, Electron loads files via file:// whose origin is "null".
+// Firebase Auth rejects "null" as an unauthorized domain during signInWithPopup.
+// Serving the renderer from http://localhost:<port> fixes this because
+// Firebase always includes "localhost" in its authorized domains by default.
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.json': 'application/json',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.map': 'application/json'
+}
+
+let localServer: http.Server | null = null
+
+function startStaticServer(dir: string): Promise<number> {
+  return new Promise((resolve) => {
+    localServer = http.createServer((req, res) => {
+      let urlPath = (req.url ?? '/').split('?')[0]
+      if (urlPath === '/') urlPath = '/index.html'
+
+      const abs = join(dir, urlPath)
+      // SPA fallback — all unknown paths serve index.html for client-side routing
+      const target =
+        fs.existsSync(abs) && !fs.statSync(abs).isDirectory() ? abs : join(dir, 'index.html')
+
+      const contentType = MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream'
+      fs.readFile(target, (err, data) => {
+        if (err) {
+          res.writeHead(404, { 'Content-Type': 'text/plain' })
+          res.end('Not found')
+          return
+        }
+        res.writeHead(200, { 'Content-Type': contentType })
+        res.end(data)
+      })
+    })
+    localServer.listen(0, '127.0.0.1', () => {
+      resolve((localServer!.address() as AddressInfo).port)
+    })
+  })
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -24,25 +82,57 @@ function createWindow(): void {
     mainWindow.show()
   })
 
+  // ── Google OAuth popup support ───────────────────────────────────────────
+  // Firebase signInWithPopup opens a new window. We must:
+  //   1. Let setWindowOpenHandler return 'allow' for Google/Firebase URLs
+  //   2. Listen for did-create-window and configure the popup's CSP so that
+  //      accounts.google.com can run its own scripts safely.
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    // Allow Google login popup
     if (
       details.url.includes('accounts.google.com') ||
       details.url.includes('firebaseapp.com') ||
+      details.url.includes('google.com/o/oauth') ||
       details.url.includes('api.sanity.io')
     ) {
-      return { action: 'allow' }
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          autoHideMenuBar: true,
+          width: 500,
+          height: 700,
+          webPreferences: {
+            sandbox: true
+          }
+        }
+      }
     }
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
+  // Allow the popup window to finish the OAuth flow without CSP blocking
+  mainWindow.webContents.on('did-create-window', (popup) => {
+    popup.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:"
+          ]
+        }
+      })
+    })
+  })
+
+  // Load the dev-server URL in development, or start a local static server in
+  // production so the renderer origin is http://localhost (an authorized Firebase
+  // Auth domain) rather than the opaque file:// origin.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    startStaticServer(join(__dirname, '../renderer')).then((port) => {
+      mainWindow.loadURL(`http://localhost:${port}`)
+    })
   }
 }
 
@@ -50,8 +140,8 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  // Set app user model id for windows (must match appId in electron-builder.yml)
+  electronApp.setAppUserModelId('com.4komni.omnishop')
 
   // ── Content-Security-Policy ──────────────────────────────────────────────
   // In dev, Vite's dev server is on localhost and already trusted.
@@ -97,6 +187,12 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // Quit the app (called from renderer's quit buttons)
+  ipcMain.on('app:quit', () => {
+    localServer?.close()
+    app.quit()
+  })
 
   ipcMain.on('update-display', (_, config: { mode: string; width?: number; height?: number }) => {
     const win = BrowserWindow.getAllWindows()[0]
@@ -169,6 +265,7 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  localServer?.close()
   if (process.platform !== 'darwin') {
     app.quit()
   }

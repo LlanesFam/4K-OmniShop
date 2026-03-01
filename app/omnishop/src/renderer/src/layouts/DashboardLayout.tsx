@@ -5,6 +5,7 @@ import { useShopStore } from '@/store/useShopStore'
 import { AppSidebar } from '@/components/app-sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { AppLoader } from '@/components/ui/app-loader'
 
 /**
  * Protected layout wrapping all Dashboard-mode routes.
@@ -21,6 +22,7 @@ export default function DashboardLayout(): React.JSX.Element | null {
   const { user, loading, profile, profileLoading } = useAuthStore()
   const { shop, shopLoading, subscribeShop, clearShop } = useShopStore()
   const navigate = useNavigate()
+  const [contentReady, setContentReady] = React.useState(false)
 
   const isAdmin = profile?.role === 'admin'
 
@@ -61,36 +63,51 @@ export default function DashboardLayout(): React.JSX.Element | null {
 
   const isLoadingAny = loading || profileLoading || (!isAdmin && shopLoading)
 
-  if (isLoadingAny) {
-    return (
-      <div className="flex h-screen items-center justify-center text-muted-foreground">
-        Loading&hellip;
-      </div>
-    )
-  }
+  // Trigger content fade-in once loading finishes.
+  // Delay 500ms so the content starts appearing as the loader is finishing
+  // its 600ms fade — smooth crossfade instead of a hard cut.
+  React.useEffect(() => {
+    if (!isLoadingAny) {
+      const t = setTimeout(() => setContentReady(true), 500)
+      return () => clearTimeout(t)
+    }
+    setContentReady(false)
+    return undefined
+  }, [isLoadingAny])
 
   // Redirect is in progress; render nothing to avoid flash.
-  if (!user || !profile || profile.status !== 'approved') {
+  if (!isLoadingAny && (!user || !profile || profile.status !== 'approved')) {
     return null
   }
-  if (!isAdmin && !shop) {
+  if (!isLoadingAny && !isAdmin && !shop) {
     return null
   }
 
   return (
-    <SidebarProvider className="h-screen w-screen overflow-hidden">
-      {/* ── Collapsible Sidebar ── */}
-      <AppSidebar isAdmin={profile?.role === 'admin'} />
+    <>
+      {/* Animated loader overlays until data is ready */}
+      <AppLoader visible={isLoadingAny} label="Loading your shop…" />
 
-      {/* ── Main content inset: fills remaining width, scrollable ── */}
-      <SidebarInset className="flex h-screen flex-col overflow-hidden">
-        <DashboardHeader />
+      <SidebarProvider
+        className="h-screen w-screen overflow-hidden"
+        style={{
+          opacity: contentReady ? 1 : 0,
+          transition: 'opacity 400ms ease-in-out'
+        }}
+      >
+        {/* ── Collapsible Sidebar ── */}
+        <AppSidebar isAdmin={profile?.role === 'admin'} />
 
-        {/* ── Scrollable page content ── */}
-        <div className="h-screen w-full flex-1 overflow-y-auto p-10">
-          <Outlet />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        {/* ── Main content inset: fills remaining width, scrollable ── */}
+        <SidebarInset className="flex h-screen flex-col overflow-hidden">
+          <DashboardHeader />
+
+          {/* ── Scrollable page content ── */}
+          <div className="h-screen w-full flex-1 overflow-y-auto p-10">
+            <Outlet />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </>
   )
 }

@@ -168,6 +168,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ error: null })
     try {
       const provider = new GoogleAuthProvider()
+      // Force the account-picker every time so users can switch accounts
+      provider.setCustomParameters({ prompt: 'select_account' })
       const cred = await signInWithPopup(auth, provider)
       // Create a pending profile if this is a new Google sign-in
       const existing = await fetchUserProfile(cred.user.uid)
@@ -215,6 +217,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // Show the global loading overlay during the sign-out → redirect transition
+    set({ loading: true })
     await signOut(auth)
     // Clear shop subscription + state so it doesn't leak to the next session
     const { clearShop } = await import('@/store/useShopStore').then((m) =>
