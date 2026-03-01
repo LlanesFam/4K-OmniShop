@@ -1,0 +1,20 @@
+{
+  "name": "4k-omnishop",
+  "version": "1.0.0",
+  "description": "Offline-First Desktop POS & Store Manager",
+  "scripts": {
+    "dev": "npm run dev --prefix app/omnishop",
+    "build": "npm run build --prefix app/omnishop",
+    "lint": "npm run lint --prefix app/omnishop",
+    "format": "npm run format --prefix app/omnishop",
+    "sanity": "npm run dev --prefix app/sanity-studio"
+  },
+  "keywords": [
+    "pos",
+    "electron",
+    "react",
+    "offline-first"
+  ],
+  "author": "LlanesFam",
+  "license": "ISC"
+}

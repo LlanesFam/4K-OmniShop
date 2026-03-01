@@ -1,0 +1,4 @@
+provider: github
+owner: LlanesFam
+repo: 4K-OmniShop
+updaterCacheDirName: omnishop-updater
