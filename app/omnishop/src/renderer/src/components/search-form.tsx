@@ -1,9 +1,10 @@
+import type { ComponentProps, ReactNode } from 'react'
 import { Search } from 'lucide-react'
 
 import { Label } from '@/components/ui/label'
 import { SidebarGroup, SidebarGroupContent, SidebarInput } from '@/components/ui/sidebar'
 
-export function SearchForm({ ...props }: React.ComponentProps<'form'>): React.ReactNode {
+export function SearchForm({ ...props }: ComponentProps<'form'>): ReactNode {
   return (
     <form {...props}>
       <SidebarGroup className="py-0">

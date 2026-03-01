@@ -1,10 +1,11 @@
+import type React from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Particles from '@/components/ui/particles'
 import { useResolvedTheme } from '@/store/useThemeStore'
-import { Logo } from './logo'
+import { Logo } from '@/components/ui/logo'
 
 export default function Hero(): React.JSX.Element {
   const theme = useResolvedTheme()

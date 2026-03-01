@@ -1,9 +1,10 @@
+import type { FC } from 'react'
 import { useResolvedTheme } from '@/store/useThemeStore'
 import DotPattern from '@/components/ui/dot-pattern'
 import Particles from '@/components/ui/particles'
 import { cn } from '@/lib/utils'
 
-export const BackgroundPattern: React.FC = () => {
+export const BackgroundPattern: FC = () => {
   const resolvedTheme = useResolvedTheme()
   const isLightTheme = resolvedTheme === 'light'
 
