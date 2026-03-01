@@ -45,12 +45,12 @@ const changelog = [
 
 export default function Timeline(): React.JSX.Element {
   return (
-    <div className="max-w-(--breakpoint-sm) px-6 py-12 md:mx-auto md:py-20">
+    <div className="max-w-screen-sm px-6 py-12 md:mx-auto md:py-20">
       <div className="relative">
         {/* Timeline line */}
         {/* <div className="absolute left-0 top-3 bottom-0 border-l-2" /> */}
 
-        {changelog.reverse().map(({ title, description, date, version }, index) => (
+        {[...changelog].reverse().map(({ title, description, date, version }, index) => (
           <div className="group relative" key={index}>
             {/* Content */}
             <div className="flex items-start">

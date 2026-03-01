@@ -13,7 +13,7 @@ const RESEND_COOLDOWN_SECONDS = 60
  * Shown after sign-up. Prompts the user to verify their email before continuing.
  *
  * - "Resend email" button with a 60-second cooldown.
- * - "I've verified my email" button â€” reloads Firebase user and navigates to
+ * - "I've verified my email" button — reloads Firebase user and navigates to
  *   `/pending-approval` if `emailVerified === true`.
  * - Guards: redirects to `/login` if there is no authenticated user.
  */
@@ -26,7 +26,7 @@ export default function VerifyEmailPage(): React.JSX.Element {
   const [checkLoading, setCheckLoading] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
 
-  // Guard: no user â†’ go back to login
+  // Guard: no user → go back to login
   useEffect(() => {
     if (!user) {
       navigate('/login', { replace: true })
@@ -47,7 +47,7 @@ export default function VerifyEmailPage(): React.JSX.Element {
       setResentSuccess(true)
       setCooldown(RESEND_COOLDOWN_SECONDS)
     } catch {
-      // silently ignore â€” user can try again
+      // silently ignore — user can try again
     }
   }
 

@@ -7,7 +7,7 @@ import { NavMenu } from '@/components/ui/nav-menu'
 const Navbar = (): React.JSX.Element => {
   return (
     <nav className="h-16 border-b bg-background">
-      <div className="mx-auto flex h-full max-w-(--breakpoint-lg) items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-full max-w-screen-lg items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-8">
           <Logo />
 

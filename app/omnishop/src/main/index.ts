@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session, screen } from 'electron'
-import { join, extname } from 'path'
+import { join, extname, resolve as resolvePath, normalize, sep } from 'path'
 import http from 'http'
 import fs from 'fs'
 import type { AddressInfo } from 'net'
@@ -40,10 +40,16 @@ function startStaticServer(dir: string): Promise<number> {
       let urlPath = (req.url ?? '/').split('?')[0]
       if (urlPath === '/') urlPath = '/index.html'
 
-      const abs = join(dir, urlPath)
-      // SPA fallback — all unknown paths serve index.html for client-side routing
+      // Guard against path traversal attacks (e.g. /../sensitive-file).
+      // Resolve to an absolute path and confirm it stays within the renderer dir.
+      const abs = resolvePath(join(dir, normalize(decodeURIComponent(urlPath))))
+      const isSafe = abs === dir || abs.startsWith(dir + sep)
+
+      // SPA fallback — unknown or unsafe paths serve index.html for client-side routing
       const target =
-        fs.existsSync(abs) && !fs.statSync(abs).isDirectory() ? abs : join(dir, 'index.html')
+        isSafe && fs.existsSync(abs) && !fs.statSync(abs).isDirectory()
+          ? abs
+          : join(dir, 'index.html')
 
       const contentType = MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream'
       fs.readFile(target, (err, data) => {
@@ -70,7 +76,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     fullscreen: true,
-    // resizable is managed dynamically via IPC — windowed mode sets false, fullscreen/borderless unsets it
+    // resizable is forced to false across all display modes (fixed resolution); managed via IPC
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -110,9 +116,13 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // Allow the popup window to finish the OAuth flow without CSP blocking
+  // Allow the popup window to finish the OAuth flow without CSP blocking.
+  // The CSP handler is registered per-popup and removed when the popup closes,
+  // so it doesn't accumulate across multiple sign-in attempts.
   mainWindow.webContents.on('did-create-window', (popup) => {
-    popup.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const cspHandler: Parameters<
+      typeof popup.webContents.session.webRequest.onHeadersReceived
+    >[0] = (details, callback) => {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
@@ -121,6 +131,11 @@ function createWindow(): void {
           ]
         }
       })
+    }
+    popup.webContents.session.webRequest.onHeadersReceived(cspHandler)
+    popup.on('closed', () => {
+      // Remove the CSP override when the popup closes so listeners don't stack
+      popup.webContents.session.webRequest.onHeadersReceived(null)
     })
   })
 

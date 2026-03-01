@@ -15,6 +15,7 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  deleteField,
   orderBy,
   type Unsubscribe
 } from 'firebase/firestore'
@@ -74,7 +75,7 @@ export function subscribeToAllUsers(
 export async function approveUser(uid: string): Promise<void> {
   await updateDoc(doc(db, 'users', uid), {
     status: 'approved' satisfies UserStatus,
-    rejectionReason: null
+    rejectionReason: deleteField()
   })
 }
 
@@ -98,7 +99,7 @@ export async function suspendUser(uid: string, reason: string): Promise<void> {
 export async function reactivateUser(uid: string): Promise<void> {
   await updateDoc(doc(db, 'users', uid), {
     status: 'approved' satisfies UserStatus,
-    rejectionReason: null
+    rejectionReason: deleteField()
   })
 }
 

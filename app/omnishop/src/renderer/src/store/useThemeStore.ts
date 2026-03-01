@@ -53,6 +53,9 @@ export function applyTheme(theme: Theme, colorTheme: ColorTheme): void {
  * the persisted theme immediately, preventing a flash of the wrong theme.
  * Also wires up the OS preference change listener for `system` mode.
  */
+// Module-level guard — prevents duplicate listeners on HMR / multiple calls
+let _themeListenerAttached = false
+
 export function initTheme(): void {
   // Read directly from localStorage to avoid waiting for Zustand rehydration.
   try {
@@ -69,19 +72,22 @@ export function initTheme(): void {
 
   // Re-apply the dark/light class whenever the OS preference changes.
   // Only has a visual effect when the stored theme is 'system'.
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    try {
-      const raw = localStorage.getItem('omnishop-theme')
-      const parsed = raw ? JSON.parse(raw) : null
+  if (!_themeListenerAttached) {
+    _themeListenerAttached = true
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      try {
+        const raw = localStorage.getItem('omnishop-theme')
+        const parsed = raw ? JSON.parse(raw) : null
 
-      const theme: Theme = parsed?.state?.theme ?? 'system'
-      const colorTheme: ColorTheme = parsed?.state?.colorTheme ?? 'modern-minimal'
+        const theme: Theme = parsed?.state?.theme ?? 'system'
+        const colorTheme: ColorTheme = parsed?.state?.colorTheme ?? 'modern-minimal'
 
-      if (theme === 'system') applyTheme('system', colorTheme)
-    } catch {
-      /* ignore */
-    }
-  })
+        if (theme === 'system') applyTheme('system', colorTheme)
+      } catch {
+        /* ignore */
+      }
+    })
+  }
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
