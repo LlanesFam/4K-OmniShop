@@ -11,6 +11,7 @@ import { CheckCircle2, Circle, ChevronDown, ChevronUp, Sparkles, ArrowRight } fr
 import { updateShopProfile } from '@/lib/shopService'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useShopStore } from '@/store/useShopStore'
+import { useProductStore } from '@/store/useProductStore'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,7 @@ interface ChecklistItem {
 export function OnboardingChecklist(): React.JSX.Element | null {
   const { user } = useAuthStore()
   const { shop } = useShopStore()
+  const { products, loading: productsLoading } = useProductStore()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
   const [dismissing, setDismissing] = useState(false)
@@ -51,7 +53,7 @@ export function OnboardingChecklist(): React.JSX.Element | null {
       id: 'product',
       label: 'Add your first product',
       description: 'Start building your catalog so customers can browse.',
-      done: false, // will be true once the products page sets a flag — for now always pending
+      done: !productsLoading && products.length > 0,
       action: { label: 'Go to Products', href: '/dashboard/products' }
     }
   ]

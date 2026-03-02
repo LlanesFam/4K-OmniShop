@@ -118,6 +118,7 @@ function createWindow(): void {
       details.url.includes('accounts.google.com') ||
       details.url.includes('firebaseapp.com') ||
       details.url.includes('google.com/o/oauth') ||
+      details.url.includes('omnishop.quadkore.app') ||
       details.url.includes('api.sanity.io')
     ) {
       return {
@@ -143,9 +144,17 @@ function createWindow(): void {
   // The CSP handler is registered per-popup and removed when the popup closes,
   // so it doesn't accumulate across multiple sign-in attempts.
   mainWindow.webContents.on('did-create-window', (popup) => {
-    const cspHandler: Parameters<
-      typeof popup.webContents.session.webRequest.onHeadersReceived
-    >[0] = (details, callback) => {
+    // Capture the session reference NOW, while webContents is still alive.
+    // The 'closed' event fires after the BrowserWindow (and its webContents)
+    // are destroyed, so accessing popup.webContents inside that handler throws
+    // "TypeError: Object has been destroyed". The session object itself outlives
+    // the window, so it is safe to call methods on it after close.
+    const popupSession = popup.webContents.session
+
+    const cspHandler: Parameters<typeof popupSession.webRequest.onHeadersReceived>[0] = (
+      details,
+      callback
+    ) => {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
@@ -155,10 +164,11 @@ function createWindow(): void {
         }
       })
     }
-    popup.webContents.session.webRequest.onHeadersReceived(cspHandler)
+    popupSession.webRequest.onHeadersReceived(cspHandler)
     popup.on('closed', () => {
-      // Remove the CSP override when the popup closes so listeners don't stack
-      popup.webContents.session.webRequest.onHeadersReceived(null)
+      // Remove the CSP override via the saved session ref — do NOT use
+      // popup.webContents here; it is already destroyed at this point.
+      popupSession.webRequest.onHeadersReceived(null)
     })
   })
 
@@ -192,8 +202,8 @@ app.whenReady().then(() => {
       "script-src 'self' 'unsafe-eval' https://apis.google.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com",
-      "frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com https://omnishop.quadkore.app",
+      "frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://omnishop.quadkore.app",
       "worker-src 'self' blob:"
     ].join('; ')
 
