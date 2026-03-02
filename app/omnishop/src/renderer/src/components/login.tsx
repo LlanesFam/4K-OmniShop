@@ -82,6 +82,7 @@ export default function Login(): React.JSX.Element {
     sendPasswordReset,
     user,
     profile,
+    loading,
     profileLoading,
     error,
     clearError
@@ -280,7 +281,7 @@ export default function Login(): React.JSX.Element {
                 {/* Google SSO */}
                 <Button
                   className="w-full gap-2.5"
-                  disabled={isGoogleLoading || isSubmitting}
+                  disabled={isGoogleLoading || isSubmitting || loading}
                   onClick={handleGoogle}
                   type="button"
                   variant="outline"

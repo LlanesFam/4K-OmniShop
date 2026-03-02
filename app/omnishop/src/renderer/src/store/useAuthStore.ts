@@ -193,8 +193,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? 'auth/internal-error'
-      // Silently ignore user-cancelled or duplicate popup requests
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return
+      // User intentionally closed the popup — silently ignore
+      if (code === 'auth/popup-closed-by-user') return
+      // Firebase internal state conflict (common right after update restart while
+      // auth is still restoring the previous session from IndexedDB). Retry once
+      // after a short delay to let the SDK settle.
+      if (code === 'auth/cancelled-popup-request') {
+        await new Promise((r) => setTimeout(r, 1200))
+        try {
+          const provider2 = new GoogleAuthProvider()
+          provider2.setCustomParameters({ prompt: 'select_account' })
+          const cred2 = await signInWithPopup(auth, provider2)
+          const existing2 = await fetchUserProfile(cred2.user.uid)
+          if (!existing2) {
+            await createUserProfile(
+              cred2.user.uid,
+              cred2.user.displayName ?? 'Google User',
+              cred2.user.email ?? ''
+            )
+          }
+          return
+        } catch (retryErr: unknown) {
+          const retryCode = (retryErr as { code?: string }).code ?? 'auth/internal-error'
+          if (
+            retryCode === 'auth/popup-closed-by-user' ||
+            retryCode === 'auth/cancelled-popup-request'
+          )
+            return
+          set({ error: { code: retryCode, message: formatAuthError(retryCode) } })
+          throw retryErr
+        }
+      }
       set({ error: { code, message: formatAuthError(code) } })
       throw err
     }

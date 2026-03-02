@@ -25,7 +25,7 @@ export default function Hero(): React.JSX.Element {
         />
         <div className="relative z-10 max-w-3xl text-center">
           <Badge asChild className="rounded-full border-border py-1" variant="outline">
-            <Link to="/changelog">v1.1.1-beta</Link>
+            <Link to="/changelog">v{__APP_VERSION__}</Link>
           </Badge>
           <div className="mt-6 flex items-center justify-center">
             <OmnishopWordmark className="w-64 sm:w-80 md:w-96 lg:w-[480px]" />
