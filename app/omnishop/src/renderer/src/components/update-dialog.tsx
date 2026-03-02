@@ -9,6 +9,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { ReleaseNotes } from '@/components/ui/release-notes'
 import { useUpdaterStore } from '@/store/useUpdaterStore'
 
@@ -27,10 +28,11 @@ export function UpdateDialog(): React.JSX.Element {
 
   return (
     <Dialog open={showUpdateDialog} onOpenChange={(o) => !o && closeUpdateDialog()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-w-lg flex-col gap-0 p-0 overflow-hidden">
+        {/* ── Header ── */}
+        <DialogHeader className="px-5 pt-5 pb-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-full bg-teal-400/15">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-teal-400/15">
               <ArrowDownToLine className="size-5 text-teal-400" />
             </div>
             <div>
@@ -43,17 +45,24 @@ export function UpdateDialog(): React.JSX.Element {
           </div>
         </DialogHeader>
 
-        {/* Release notes */}
+        {/* ── Release notes ── */}
         {releaseNotes && (
-          <div className="max-h-64 overflow-y-auto rounded-lg border bg-muted/40 px-4 py-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              What&apos;s new
-            </p>
-            <ReleaseNotes markdown={releaseNotes} />
-          </div>
+          <>
+            <Separator />
+            <div className="flex flex-col gap-2 px-5 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                What&apos;s new
+              </p>
+              <div className="max-h-56 overflow-y-auto rounded-lg border bg-muted/40 px-4 py-3">
+                <ReleaseNotes markdown={releaseNotes} />
+              </div>
+            </div>
+          </>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        {/* ── Footer ── */}
+        <Separator />
+        <DialogFooter className="gap-2 px-5 py-4 sm:gap-2">
           <Button variant="outline" onClick={closeUpdateDialog} disabled={installing}>
             Later
           </Button>

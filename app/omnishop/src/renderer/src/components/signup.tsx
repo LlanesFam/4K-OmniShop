@@ -114,7 +114,7 @@ export default function SignUp(): React.JSX.Element {
 
   return (
     <PageTransition exiting={exiting}>
-      <div className="relative flex min-h-screen overflow-hidden bg-background">
+      <div className="relative flex h-screen overflow-hidden bg-background">
         <Particles
           className="absolute inset-0"
           quantity={80}

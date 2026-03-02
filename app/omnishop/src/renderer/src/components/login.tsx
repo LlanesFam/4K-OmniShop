@@ -175,7 +175,7 @@ export default function Login(): React.JSX.Element {
 
   return (
     <PageTransition exiting={exiting}>
-      <div className="relative flex min-h-screen overflow-hidden bg-background">
+      <div className="relative flex h-screen overflow-hidden bg-background">
         {/* ── Quit button ── */}
         <button
           onClick={() => setShowQuitConfirm(true)}
