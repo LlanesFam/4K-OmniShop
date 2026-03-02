@@ -1,5 +1,6 @@
 appId: com.4komni.omnishop
 productName: OmniShop
+compression: maximum
 directories:
   buildResources: build
 files:
@@ -9,6 +10,14 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!node_modules/**/*.md'
+  - '!node_modules/**/*.map'
+  - '!node_modules/**/*.ts'
+  - '!node_modules/**/test/**'
+  - '!node_modules/**/tests/**'
+  - '!node_modules/**/docs/**'
+  - '!node_modules/**/example/**'
+  - '!node_modules/**/examples/**'
 asarUnpack:
   - resources/**
 win:
@@ -45,6 +54,9 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+electronLanguages:
+  - en-US
+afterPack: build/after-pack.js
 publish:
   provider: github
   owner: LlanesFam

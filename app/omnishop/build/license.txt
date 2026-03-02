@@ -1,0 +1,32 @@
+OmniShop: Software License Agreement
+=======================================
+
+Copyright (c) 2026 4K OmniShop / LlanesFam. All rights reserved.
+
+IMPORTANT: READ THIS LICENSE AGREEMENT CAREFULLY BEFORE INSTALLING OR USING THIS SOFTWARE.
+
+By installing or using OmniShop ("the Software"), you agree to the terms of this agreement.
+
+1. GRANT OF LICENSE
+   You are granted a non-exclusive, non-transferable license to install and use the
+   Software on devices that you own or control, for your personal or business use.
+
+2. RESTRICTIONS
+   You may not:
+   - Reverse engineer, decompile, or disassemble the Software
+   - Rent, lease, or lend the Software
+   - Remove any copyright notices from the Software
+
+3. DATA & PRIVACY
+   The Software connects to Firebase (Google) for authentication and data storage,
+   and Cloudinary for image uploads. Your data is governed by those services' terms.
+
+4. DISCLAIMER OF WARRANTIES
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.
+   THE AUTHORS ARE NOT LIABLE FOR ANY DAMAGES ARISING FROM USE OF THE SOFTWARE.
+
+5. TERMINATION
+   This license is effective until terminated. It terminates automatically if you
+   fail to comply with any term.
+
+By clicking "I Agree", you acknowledge that you have read and accept this agreement.
