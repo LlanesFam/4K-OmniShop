@@ -22,6 +22,7 @@ import { useShopStore } from '@/store/useShopStore'
 import { type Theme, type ColorTheme, useThemeStore } from '@/store/useThemeStore'
 import { type DisplayMode, type Resolution, useDisplayStore } from '@/store/useDisplayStore'
 import {
+  createShopProfile,
   updateShopProfile,
   SHOP_CATEGORIES,
   CATEGORY_TAXONOMY,
@@ -202,14 +203,16 @@ function SettingRow({
 // ─── Store Tab ────────────────────────────────────────────────────────────────
 
 function StoreTab(): React.JSX.Element {
-  const { user } = useAuthStore()
+  const { user, profile } = useAuthStore()
   const { shop } = useShopStore()
+  const isAdmin = profile?.role === 'admin'
 
   const [categories, setCategories] = useState<ShopCategory[]>(shop?.categories ?? [])
   const [subCategories, setSubCategories] = useState<string[]>(shop?.subCategories ?? [])
   const [logoUrl, setLogoUrl] = useState(shop?.logoUrl ?? '')
   const [bannerUrl, setBannerUrl] = useState(shop?.bannerUrl ?? '')
-  const [shopName, setShopName] = useState(shop?.shopName ?? '')
+  // Admins who haven't set up a shop yet default to the "OmniShop" name.
+  const [shopName, setShopName] = useState(shop?.shopName ?? (isAdmin ? 'OmniShop' : ''))
   const [description, setDescription] = useState(shop?.description ?? '')
   const [phone, setPhone] = useState(shop?.phone ?? '')
   const [address, setAddress] = useState(shop?.address ?? '')
@@ -221,7 +224,14 @@ function StoreTab(): React.JSX.Element {
   // The ref prevents overwriting in-progress user edits on subsequent renders.
   const initialized = useRef(false)
   useEffect(() => {
-    if (!shop || initialized.current) return
+    if (initialized.current) return
+    if (!shop) {
+      // No shop yet. For admin, defaults are already set via useState initial
+      // values ("OmniShop"). Mark initialized so this effect doesn't keep
+      // running if Firestore confirms the shop truly doesn't exist.
+      if (isAdmin) initialized.current = true
+      return
+    }
     initialized.current = true
     setCategories(shop.categories ?? [])
     setSubCategories(shop.subCategories ?? [])
@@ -231,14 +241,14 @@ function StoreTab(): React.JSX.Element {
     setDescription(shop.description ?? '')
     setPhone(shop.phone ?? '')
     setAddress(shop.address ?? '')
-  }, [shop])
+  }, [shop, isAdmin])
 
   const handleSave = async (): Promise<void> => {
     if (!user) return
     setSaving(true)
     setSaved(false)
     try {
-      await updateShopProfile(user.uid, {
+      const data = {
         categories,
         subCategories,
         logoUrl: logoUrl || undefined,
@@ -247,7 +257,15 @@ function StoreTab(): React.JSX.Element {
         description,
         phone,
         address
-      })
+      }
+      if (!shop) {
+        // No Firestore document exists yet (first-time admin shop setup).
+        // updateDoc would throw on a non-existent document, so we use
+        // createShopProfile (setDoc) to initialise it instead.
+        await createShopProfile(user.uid, data)
+      } else {
+        await updateShopProfile(user.uid, data)
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } finally {
@@ -257,6 +275,21 @@ function StoreTab(): React.JSX.Element {
 
   return (
     <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+      {/* Admin first-time setup hint */}
+      {isAdmin && !shop && (
+        <div className="flex items-start gap-3 border-b bg-primary/5 px-6 py-4">
+          <Store className="mt-0.5 size-4 shrink-0 text-primary" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Set up your OmniShop</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              As admin your shop is called{' '}
+              <span className="font-medium text-foreground">OmniShop</span>. Fill in the details
+              below and click <span className="font-medium text-foreground">Save changes</span> to
+              initialise it.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="divide-y">
         {/* Categories */}
         <div className="px-6 py-4 flex flex-col gap-3">

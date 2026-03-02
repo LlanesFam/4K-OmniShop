@@ -1,4 +1,4 @@
-import * as React from 'react'
+import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   HelpCircle,
@@ -175,9 +175,9 @@ export function AppSidebar({ isAdmin = false, ...props }: AppSidebarProps): Reac
   return (
     <Sidebar collapsible="icon" {...props}>
       {/* ── Header ── */}
-      <SidebarHeader className="p-0">
+      <SidebarHeader className="p-0 mt-2">
         <SidebarMenu>
-          <SidebarMenuItem>
+          <SidebarMenuItem className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
             <SidebarMenuButton
               size="lg"
               asChild

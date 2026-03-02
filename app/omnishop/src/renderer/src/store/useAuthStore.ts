@@ -12,7 +12,7 @@ import {
   signInWithPopup,
   reload
 } from 'firebase/auth'
-import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore'
+import { doc, getDoc, runTransaction, serverTimestamp, type Timestamp } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
@@ -115,18 +115,29 @@ async function fetchUserProfile(uid: string): Promise<UserProfile | null> {
 /**
  * Creates a new `pending` Firestore user profile document.
  *
+ * Uses a transaction to guarantee the write only happens when no document
+ * exists yet. This protects existing profiles (e.g. an admin role that was
+ * assigned manually) from being accidentally overwritten by `setDoc`.
+ *
  * @param uid - Firebase Auth UID.
  * @param displayName - User's full name.
  * @param email - User's email address.
  */
 async function createUserProfile(uid: string, displayName: string, email: string): Promise<void> {
-  await setDoc(doc(db, 'users', uid), {
-    uid,
-    displayName,
-    email: email.toLowerCase().trim(),
-    role: 'user' satisfies UserRole,
-    status: 'pending' satisfies UserStatus,
-    createdAt: serverTimestamp()
+  const ref = doc(db, 'users', uid)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    // Only create the document if it does not already exist.
+    if (!snap.exists()) {
+      tx.set(ref, {
+        uid,
+        displayName,
+        email: email.toLowerCase().trim(),
+        role: 'user' satisfies UserRole,
+        status: 'pending' satisfies UserStatus,
+        createdAt: serverTimestamp()
+      })
+    }
   })
 }
 

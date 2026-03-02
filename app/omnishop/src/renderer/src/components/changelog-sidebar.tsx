@@ -75,7 +75,7 @@ export function ChangelogSidebar({
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-medium">Documentation</span>
-                  <span className="">v1.0.0</span>
+                  <span className="">v1.1.0-beta</span>
                 </div>
               </a>
             </SidebarMenuButton>

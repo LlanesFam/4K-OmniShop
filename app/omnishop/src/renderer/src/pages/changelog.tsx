@@ -82,11 +82,23 @@ export default function ChangelogPage(): React.JSX.Element {
                 </div>
               ) : (
                 <>
-                  <div id="v1-1-0" className="mb-16 scroll-mt-20">
-                    <h2>v1.1.0 - Theme Polish & Documentation</h2>
+                  <div id="v1-1-0-beta" className="mb-16 scroll-mt-20">
+                    <h2>v1.1.0-beta - Store Management</h2>
                     <p className="text-muted-foreground">March 2, 2026</p>
                     <ul>
+                      <li>Added product management features.</li>
+                      <li>Added category and price management.</li>
+                      <li>Updated UI for product detail modal.</li>
+                      <li>Packaged the application for distribution.</li>
+                    </ul>
+                  </div>
+
+                  <div id="v1-0-1-beta" className="mb-16 scroll-mt-20">
+                    <h2>v1.0.1-beta - Theme Polish & Documentation</h2>
+                    <p className="text-muted-foreground">March 1, 2026</p>
+                    <ul>
                       <li>Added dedicated documentation layout with sidebar component.</li>
+                      <li>Added store and profile customization.</li>
                       <li>Resolved ESLint and Tailwind configuration warnings.</li>
                       <li>
                         Implemented Radix Slot polymorphic <code>asChild</code> patterns for the
@@ -95,7 +107,7 @@ export default function ChangelogPage(): React.JSX.Element {
                     </ul>
                   </div>
 
-                  <div id="v1-0-0" className="mb-16 scroll-mt-20">
+                  <div id="v1-0-0-beta" className="mb-16 scroll-mt-20">
                     <h2>v1.0.0 - Initial Release</h2>
                     <p className="text-muted-foreground">March 1, 2026</p>
                     <p>Initial stable release of OmniShop.</p>

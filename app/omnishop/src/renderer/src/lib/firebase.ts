@@ -9,7 +9,15 @@ import {
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  // In dev the custom domain (e.g. omnishop.quadkore.app) requires Firebase
+  // Hosting to be fully provisioned before it resolves. Using it before that
+  // causes ERR_NAME_NOT_RESOLVED for the auth popup handler and
+  // ERR_BLOCKED_BY_CSP for the invisible /__/auth/iframe that the SDK embeds
+  // in the main window. The default firebaseapp.com domain always resolves, so
+  // we use it in dev and only switch to the custom domain in production.
+  authDomain: import.meta.env.DEV
+    ? `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`
+    : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,

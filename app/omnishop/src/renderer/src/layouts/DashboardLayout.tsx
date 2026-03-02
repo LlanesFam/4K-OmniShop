@@ -2,6 +2,8 @@ import React, { useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useShopStore } from '@/store/useShopStore'
+import { useCategoryStore } from '@/store/useCategoryStore'
+import { useProductStore } from '@/store/useProductStore'
 import { AppSidebar } from '@/components/app-sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
@@ -26,11 +28,20 @@ export default function DashboardLayout(): React.JSX.Element | null {
 
   const isAdmin = profile?.role === 'admin'
 
-  // Start shop subscription once we know the user is approved
+  const categoryStore = useCategoryStore()
+  const productStore = useProductStore()
+
+  // Start shop + catalog subscriptions once we know the user is approved
   useEffect(() => {
     if (!user || !profile || profile.status !== 'approved') return
     subscribeShop(user.uid)
-    return () => clearShop()
+    categoryStore.subscribe(user.uid)
+    productStore.subscribe(user.uid)
+    return () => {
+      clearShop()
+      categoryStore.unsubscribe()
+      productStore.unsubscribe()
+    }
   }, [user?.uid, profile?.status]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
