@@ -70,7 +70,7 @@ export default function PendingApprovalPage(): React.JSX.Element {
   const isRejected = localProfile?.status === 'rejected'
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
+    <div className="flex h-screen items-center justify-center overflow-hidden bg-background px-6 py-12">
       <div className="w-full max-w-sm">
         {/* Branding */}
         <div className="mb-8 flex flex-col items-center gap-3">

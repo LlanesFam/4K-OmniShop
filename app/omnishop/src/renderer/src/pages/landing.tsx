@@ -3,7 +3,7 @@ import Hero from '@/components/hero'
 
 export default function LandingPage(): React.JSX.Element {
   return (
-    <div>
+    <div className="h-screen overflow-hidden">
       <Hero />
     </div>
   )

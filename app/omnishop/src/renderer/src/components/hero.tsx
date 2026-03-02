@@ -16,7 +16,7 @@ export default function Hero(): React.JSX.Element {
 
   return (
     <PageTransition exiting={exiting}>
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-6">
+      <div className="relative flex h-screen items-center justify-center overflow-hidden px-6">
         <Particles
           className="absolute inset-0"
           quantity={100}
