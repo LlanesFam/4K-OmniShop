@@ -8,6 +8,8 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppLoader } from '@/components/ui/app-loader'
+import { WhatsNewDialog } from '@/components/whats-new-dialog'
+import { useUpdater } from '@/hooks/useUpdater'
 
 /**
  * Protected layout wrapping all Dashboard-mode routes.
@@ -27,6 +29,9 @@ export default function DashboardLayout(): React.JSX.Element | null {
   const [contentReady, setContentReady] = React.useState(false)
 
   const isAdmin = profile?.role === 'admin'
+
+  // Register updater IPC listeners + trigger auto-check
+  useUpdater()
 
   const categoryStore = useCategoryStore()
   const productStore = useProductStore()
@@ -98,6 +103,9 @@ export default function DashboardLayout(): React.JSX.Element | null {
     <>
       {/* Animated loader overlays until data is ready */}
       <AppLoader visible={isLoadingAny} label="Loading your shop…" />
+
+      {/* Post-update What's New dialog — shown once after a successful update */}
+      <WhatsNewDialog />
 
       <SidebarProvider
         className="h-screen w-screen overflow-hidden"

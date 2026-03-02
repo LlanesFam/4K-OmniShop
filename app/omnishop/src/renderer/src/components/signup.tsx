@@ -22,7 +22,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Logo } from '@/components/ui/logo'
 import { OmnishopWordmark } from '@/components/ui/omnishop-wordmark'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
