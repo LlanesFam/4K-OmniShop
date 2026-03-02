@@ -1,19 +1,40 @@
 import * as React from 'react'
 
-// ── Minimal GitHub-flavoured markdown renderer ────────────────────────────────
-// Handles the patterns typically found in GitHub Release notes:
-//   ## Heading 2 / ### Heading 3
-//   **bold** / *italic*
-//   - bullet / * bullet
-//   `inline code`
-//   blank lines → paragraph break
+// ── GitHub Release Notes renderer ─────────────────────────────────────────────
+// GitHub's electron-updater returns release notes as HTML (API converts Markdown
+// to HTML). We detect the format and handle both cases:
+//   • HTML  → dangerouslySetInnerHTML (safe: content comes only from our own releases)
+//   • Markdown → lightweight line-by-line parser
 
 interface Props {
   markdown: string
 }
 
+function isHtml(input: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(input.trimStart())
+}
+
 export function ReleaseNotes({ markdown }: Props): React.JSX.Element {
-  const nodes = React.useMemo(() => parseMarkdown(markdown), [markdown])
+  if (isHtml(markdown)) {
+    return (
+      <div
+        className="space-y-1.5 text-sm text-foreground/90
+          [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-foreground
+          [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-foreground [&_h2]:mt-2
+          [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:uppercase [&_h3]:tracking-wide [&_h3]:text-foreground/60
+          [&_ul]:ml-4 [&_ul]:list-disc [&_ul]:space-y-0.5
+          [&_ol]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-0.5
+          [&_li]:text-muted-foreground
+          [&_p]:text-muted-foreground [&_p]:leading-relaxed
+          [&_strong]:font-semibold [&_strong]:text-foreground
+          [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_code]:text-foreground
+          [&_a]:text-teal-400 [&_a]:underline-offset-2 [&_a]:hover:underline"
+        dangerouslySetInnerHTML={{ __html: markdown }}
+      />
+    )
+  }
+
+  const nodes = parseMarkdown(markdown)
   return <div className="space-y-2 text-sm text-foreground/90">{nodes}</div>
 }
 

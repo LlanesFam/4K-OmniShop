@@ -67,7 +67,7 @@ export default function SignUp(): React.JSX.Element {
   const theme = useResolvedTheme()
   const isDark = theme === 'dark'
 
-  const { signUp, loginWithGoogle, error, clearError } = useAuthStore()
+  const { signUp, loginWithGoogle, loading, error, clearError } = useAuthStore()
   const navigate = useNavigate()
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -147,7 +147,7 @@ export default function SignUp(): React.JSX.Element {
               {/* Google SSO */}
               <Button
                 className="w-full gap-2.5"
-                disabled={isSubmitting || isGoogleLoading}
+                disabled={isSubmitting || isGoogleLoading || loading}
                 onClick={handleGoogle}
                 type="button"
                 variant="outline"
