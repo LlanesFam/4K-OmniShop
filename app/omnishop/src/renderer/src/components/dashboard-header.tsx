@@ -25,6 +25,8 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { UpdateBadge } from '@/components/ui/update-badge'
+import { UpdateDialog } from '@/components/update-dialog'
 
 // ── Route map ─────────────────────────────────────────────────────────────────
 // Flat lookup: pathname → { group label | null, page title }
@@ -168,6 +170,11 @@ export function DashboardHeader(): React.JSX.Element {
 
         <Separator orientation="vertical" className="h-4" />
 
+        {/* Update indicator */}
+        <UpdateBadge />
+
+        <Separator orientation="vertical" className="h-4" />
+
         {/* Quit */}
         <TooltipProvider delayDuration={400}>
           <Tooltip>
@@ -208,6 +215,9 @@ export function DashboardHeader(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Update install dialog ── */}
+      <UpdateDialog />
     </>
   )
 }

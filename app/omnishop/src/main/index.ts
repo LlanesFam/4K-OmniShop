@@ -1,11 +1,11 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session, screen } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, session, screen } from 'electron'
 import { join, extname, resolve as resolvePath, normalize, sep } from 'path'
 import http from 'http'
 import fs from 'fs'
 import type { AddressInfo } from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { autoUpdater } from 'electron-updater'
+import { initUpdater } from './updater'
 
 // ─── Localhost Static Server (Firebase Auth Fix) ──────────────────────────────
 // In production, Electron loads files via file:// whose origin is "null".
@@ -271,38 +271,8 @@ app.whenReady().then(() => {
 
   createWindow()
 
-  // Auto Updater: only check for updates in packaged, non-dev builds
-  if (!is.dev && app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify()
-  }
-
-  autoUpdater.on('error', (message) => {
-    console.error('There was a problem updating the application')
-    console.error(message)
-  })
-
-  autoUpdater.on('update-available', () => {
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Update Available',
-      message: 'A new version of OmniShop is available. Downloading now...'
-    })
-  })
-
-  autoUpdater.on('update-downloaded', () => {
-    dialog
-      .showMessageBox({
-        type: 'info',
-        title: 'Update Ready',
-        message: 'Update downloaded. Install and restart now?',
-        buttons: ['Yes', 'Later']
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall()
-        }
-      })
-  })
+  // In-app updater — IPC-driven, no native dialogs
+  initUpdater()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
