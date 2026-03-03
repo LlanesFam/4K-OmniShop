@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { getAuth, setPersistence, indexedDBLocalPersistence } from 'firebase/auth'
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -29,6 +29,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
+
+// Use IndexedDB for auth token persistence so the stored token survives across
+// app restarts with the same localhost port (localStorage is also origin-keyed
+// but less reliable in Electron's Chromium). This is non-blocking; sign-in
+// state is resolved asynchronously by onAuthStateChanged as usual.
+setPersistence(auth, indexedDBLocalPersistence).catch(console.error)
 
 /**
  * Firestore with IndexedDB-backed persistent cache.

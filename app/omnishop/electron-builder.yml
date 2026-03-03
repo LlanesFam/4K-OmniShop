@@ -23,6 +23,17 @@ asarUnpack:
 win:
   executableName: OmniShop
   icon: build/icon.png
+  # ── Code Signing (Windows Authenticode) ──────────────────────────────────
+  # Set these environment variables in your CI / GitHub Actions secrets:
+  #   WIN_CSC_LINK            – base64-encoded .pfx file  (or path to .pfx)
+  #   WIN_CSC_KEY_PASSWORD    – password for the .pfx
+  # electron-builder picks them up automatically; no extra config needed here.
+  # For EV certificates delivered via SSL.com's eSigner cloud service, set:
+  #   SSL_COM_USERNAME        – your SSL.com account username
+  #   SSL_COM_PASSWORD        – your SSL.com account password
+  #   SSL_COM_TOTP_SECRET     – TOTP secret from your SSL.com account
+  #   SSL_COM_CREDENTIAL_ID   – credential ID from SSL.com
+  # and add the smctl CodeSignTool step before electron-builder in your workflow.
 nsis:
   artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -41,7 +52,14 @@ mac:
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
+  # ── Notarization (macOS) ─────────────────────────────────────────────────
+  # Required env vars in CI / GitHub Actions secrets when setting to true:
+  #   CSC_LINK                – base64-encoded .p12 Developer ID certificate
+  #   CSC_KEY_PASSWORD        – password for the .p12
+  #   APPLE_ID                – your Apple ID email
+  #   APPLE_APP_SPECIFIC_PASSWORD – app-specific password (appleid.apple.com)
+  #   APPLE_TEAM_ID           – your 10-character Apple Team ID
+  notarize: false # ← change to true once enrolled in Apple Developer Program ($99/yr)
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:

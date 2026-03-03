@@ -165,7 +165,9 @@ export function parseCategoriesCSV(
   const headers = rows[0].map((h) => h.toLowerCase().trim())
   const nameIdx = headers.indexOf('name')
   const colorIdx = headers.indexOf('color')
-  const parentIdx = headers.indexOf('parentname')
+  // Accept both 'parentName' (template default) and 'parent' (common shorthand)
+  const parentIdx =
+    headers.indexOf('parentname') !== -1 ? headers.indexOf('parentname') : headers.indexOf('parent')
 
   const missingCols: string[] = []
   if (nameIdx === -1) missingCols.push('name')
@@ -266,7 +268,7 @@ export interface ProductImportRow {
   stock: number | null
   categoryName: string
   status: 'active' | 'inactive' | 'draft'
-  /** True when this name already exists in the catalog or was seen earlier in this CSV */
+  /** True when name+category already exist in the catalog or were seen earlier in this CSV */
   isDuplicate: boolean
 }
 
@@ -347,7 +349,8 @@ export function parseProductsCSV(text: string, existingNames?: Set<string>): Pro
 
   const valid: ProductImportRow[] = []
   const errors: ImportError[] = []
-  const seenNames = new Set<string>()
+  // Composite key: name||categoryName — duplicate only when BOTH match
+  const seenKeys = new Set<string>()
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]
@@ -462,9 +465,11 @@ export function parseProductsCSV(text: string, existingNames?: Set<string>): Pro
     }
 
     if (!hasError) {
-      const key = name.toLowerCase()
-      const isDuplicate = seenNames.has(key) || (existingNames?.has(key) ?? false)
-      if (!isDuplicate) seenNames.add(key)
+      // A product is a duplicate only when name AND category both match —
+      // the same name under a different category is a distinct product.
+      const key = `${name.toLowerCase()}||${categoryName.toLowerCase()}`
+      const isDuplicate = seenKeys.has(key) || (existingNames?.has(key) ?? false)
+      if (!isDuplicate) seenKeys.add(key)
       valid.push({
         row: rowNum,
         name,

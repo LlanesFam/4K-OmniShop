@@ -23,8 +23,11 @@ import ApprovalsPage from './pages/dashboard/approvals'
 import ShopsPage from './pages/dashboard/shops'
 import MessengerPage from './pages/dashboard/messenger'
 import GmailPage from './pages/dashboard/gmail'
+import StoragePage from './pages/dashboard/storage'
+import BudgetPage from './pages/dashboard/budget'
 import SettingsPage from './pages/dashboard/settings'
 import HelpPage from './pages/dashboard/help'
+import { DebugOverlay } from './components/debug-overlay'
 
 function App(): React.JSX.Element {
   const { user, loading } = useAuthStore()
@@ -100,6 +103,9 @@ function App(): React.JSX.Element {
               <Route path="/dashboard/shops" element={<ShopsPage />} />
               <Route path="/dashboard/users" element={<UsersPage />} />
               <Route path="/dashboard/approvals" element={<ApprovalsPage />} />
+              {/* Storage & Finance */}
+              <Route path="/dashboard/storage" element={<StoragePage />} />
+              <Route path="/dashboard/budget" element={<BudgetPage />} />
               {/* Socials (user) */}
               <Route path="/dashboard/messenger" element={<MessengerPage />} />
               <Route path="/dashboard/gmail" element={<GmailPage />} />
@@ -113,6 +119,7 @@ function App(): React.JSX.Element {
           </Routes>
         </HashRouter>
       </div>
+      <DebugOverlay />
     </>
   )
 }

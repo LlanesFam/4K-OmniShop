@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Monitor,
   Moon,
@@ -120,26 +120,107 @@ const RESOLUTION_OPTIONS: { value: Resolution; label: string; sub: string }[] = 
 
 function DisplayModeToggle(): React.JSX.Element {
   const { mode, setMode } = useDisplayStore()
+  // Confirmation state for the fullscreen switch (auto-reverts if not confirmed)
+  const [confirming, setConfirming] = useState(false)
+  const [countdown, setCountdown] = useState(10)
+  const prevModeRef = useRef<DisplayMode>(mode)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopTick = useCallback(() => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current)
+      tickRef.current = null
+    }
+  }, [])
+
+  const revertFullscreen = useCallback(() => {
+    stopTick()
+    setConfirming(false)
+    setCountdown(10)
+    setMode(prevModeRef.current)
+  }, [stopTick, setMode])
+
+  const confirmFullscreen = useCallback(() => {
+    stopTick()
+    setConfirming(false)
+    setCountdown(10)
+    // Mode is already applied — nothing else to do.
+  }, [stopTick])
+
+  const handleModeClick = useCallback(
+    (value: DisplayMode) => {
+      if (value === 'fullscreen' && mode !== 'fullscreen') {
+        prevModeRef.current = mode
+        setMode('fullscreen')
+        setConfirming(true)
+        setCountdown(10)
+        tickRef.current = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev <= 1) {
+              // Auto-revert when countdown hits 0
+              stopTick()
+              setConfirming(false)
+              setMode(prevModeRef.current)
+              return 10
+            }
+            return prev - 1
+          })
+        }, 1000)
+      } else {
+        setMode(value)
+      }
+    },
+    [mode, setMode, stopTick]
+  )
+
+  // Clean up interval on unmount
+  useEffect(() => () => stopTick(), [stopTick])
 
   return (
-    <div className="flex overflow-hidden rounded-md border">
-      {DISPLAY_MODE_OPTIONS.map(({ value, icon: Icon, label }) => (
-        <button
-          key={value}
-          onClick={() => setMode(value)}
-          title={label}
-          className={cn(
-            'flex items-center gap-1.5 border-r px-3 py-1.5 text-xs font-medium transition-colors last:border-r-0',
-            mode === value
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-transparent text-muted-foreground hover:bg-muted'
-          )}
-        >
-          <Icon className="size-3.5" />
-          <span>{label}</span>
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="flex overflow-hidden rounded-md border">
+        {DISPLAY_MODE_OPTIONS.map(({ value, icon: Icon, label }) => (
+          <button
+            key={value}
+            onClick={() => handleModeClick(value)}
+            title={label}
+            className={cn(
+              'flex items-center gap-1.5 border-r px-3 py-1.5 text-xs font-medium transition-colors last:border-r-0',
+              mode === value
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-transparent text-muted-foreground hover:bg-muted'
+            )}
+          >
+            <Icon className="size-3.5" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── Fullscreen confirmation overlay ────────────────────────────── */}
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center pb-10 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-xl border bg-card shadow-xl px-5 py-3.5 text-sm">
+            <span className="font-medium">Keep Full Screen?</span>
+            <span className="text-muted-foreground text-xs">
+              Reverting in <span className="font-semibold tabular-nums">{countdown}s</span>
+            </span>
+            <button
+              onClick={confirmFullscreen}
+              className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Keep
+            </button>
+            <button
+              onClick={revertFullscreen}
+              className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted transition-colors"
+            >
+              Revert
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

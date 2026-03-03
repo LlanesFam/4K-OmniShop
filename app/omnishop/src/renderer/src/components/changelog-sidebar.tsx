@@ -74,8 +74,8 @@ export function ChangelogSidebar({
                   <GalleryVerticalEnd className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-medium">Documentation</span>
-                  <span className="">v1.1.0-beta</span>
+                  <span className="font-medium">Changelog</span>
+                  <span className="">v1.1.4</span>
                 </div>
               </a>
             </SidebarMenuButton>

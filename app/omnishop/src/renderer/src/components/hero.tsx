@@ -8,15 +8,37 @@ import { useResolvedTheme } from '@/store/useThemeStore'
 import { OmnishopWordmark } from '@/components/ui/omnishop-wordmark'
 import { PageTransition } from '@/components/ui/page-transition'
 import { useTransitionNavigate } from '@/hooks/useTransitionNavigate'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription
+} from '@/components/ui/alert-dialog'
+import { PowerOff } from 'lucide-react'
+import { useState } from 'react'
 
 export default function Hero(): React.JSX.Element {
   const theme = useResolvedTheme()
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false)
   const isDark = theme === 'dark'
   const { navigateTo, exiting } = useTransitionNavigate()
 
   return (
     <PageTransition exiting={exiting}>
       <div className="relative flex h-screen items-center justify-center overflow-hidden px-6">
+        {/* ── Quit button ── */}
+        <button
+          onClick={() => setShowQuitConfirm(true)}
+          title="Quit OmniShop"
+          className="absolute right-4 top-4 z-50 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Quit app"
+        >
+          <PowerOff className="size-4" />
+        </button>
         <Particles
           className="absolute inset-0"
           quantity={100}
@@ -48,6 +70,26 @@ export default function Hero(): React.JSX.Element {
             </Button>
           </div>
         </div>
+        {/* ── Quit confirmation ── */}
+        <AlertDialog open={showQuitConfirm} onOpenChange={setShowQuitConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Quit OmniShop?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to close the application?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => window.api.quitApp()}
+              >
+                Quit
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </PageTransition>
   )

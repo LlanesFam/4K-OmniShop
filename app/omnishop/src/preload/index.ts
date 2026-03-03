@@ -43,6 +43,11 @@ const api = {
   },
 
   /**
+   * Open the Electron DevTools window for the main BrowserWindow.
+   */
+  openDevTools: (): Promise<void> => ipcRenderer.invoke('debug:open-devtools'),
+
+  /**
    * Subscribe to the post-restart "What's New" push event.
    * Returns a cleanup function that removes the listener.
    */

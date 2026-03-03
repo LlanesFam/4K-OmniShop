@@ -20,6 +20,8 @@ declare global {
     electron: ElectronAPI
     api: {
       quitApp: () => void
+      // Debug
+      openDevTools: () => Promise<void>
       // Updater
       checkForUpdates: () => Promise<void>
       installUpdate: () => Promise<void>

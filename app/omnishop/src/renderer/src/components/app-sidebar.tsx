@@ -1,6 +1,7 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
+  Archive,
   HelpCircle,
   LayoutDashboard,
   LogOut,
@@ -15,11 +16,13 @@ import {
   UserCheck,
   Users,
   BarChart3,
-  ShieldCheck
+  ShieldCheck,
+  Wallet
 } from 'lucide-react'
 
 import { useAuthStore } from '@/store/useAuthStore'
 import { useShopStore } from '@/store/useShopStore'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import {
   Sidebar,
   SidebarContent,
@@ -91,6 +94,14 @@ const USER_NAV_GROUPS: NavGroup[] = [
     ]
   },
   {
+    label: 'Storage',
+    items: [{ title: 'Storage', url: '/dashboard/storage', icon: Archive }]
+  },
+  {
+    label: 'Finance',
+    items: [{ title: 'Budget', url: '/dashboard/budget', icon: Wallet }]
+  },
+  {
     label: 'Socials',
     items: [
       { title: 'Messenger', url: '/dashboard/messenger', icon: MessageCircle },
@@ -147,17 +158,7 @@ export function AppSidebar({ isAdmin = false, ...props }: AppSidebarProps): Reac
   const location = useLocation()
   const currentPath = location.pathname
 
-  const [isOnline, setIsOnline] = React.useState(navigator.onLine)
-  React.useEffect(() => {
-    const handleOnline = (): void => setIsOnline(true)
-    const handleOffline = (): void => setIsOnline(false)
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
+  const isOnline = useNetworkStatus()
 
   /** Returns the first two uppercase letters of a display name or email. */
   const getInitials = (nameOrEmail: string | null): string => {

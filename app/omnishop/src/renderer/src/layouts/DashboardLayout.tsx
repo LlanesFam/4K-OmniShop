@@ -4,6 +4,8 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { useShopStore } from '@/store/useShopStore'
 import { useCategoryStore } from '@/store/useCategoryStore'
 import { useProductStore } from '@/store/useProductStore'
+import { useMaterialStore } from '@/store/useMaterialStore'
+import { useBudgetStore } from '@/store/useBudgetStore'
 import { AppSidebar } from '@/components/app-sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
@@ -35,6 +37,8 @@ export default function DashboardLayout(): React.JSX.Element | null {
 
   const categoryStore = useCategoryStore()
   const productStore = useProductStore()
+  const materialStore = useMaterialStore()
+  const budgetStore = useBudgetStore()
 
   // Start shop + catalog subscriptions once we know the user is approved
   useEffect(() => {
@@ -42,10 +46,14 @@ export default function DashboardLayout(): React.JSX.Element | null {
     subscribeShop(user.uid)
     categoryStore.subscribe(user.uid)
     productStore.subscribe(user.uid)
+    materialStore.subscribe(user.uid)
+    budgetStore.subscribe(user.uid)
     return () => {
       clearShop()
       categoryStore.unsubscribe()
       productStore.unsubscribe()
+      materialStore.unsubscribe()
+      budgetStore.unsubscribe()
     }
   }, [user?.uid, profile?.status]) // eslint-disable-line react-hooks/exhaustive-deps
 

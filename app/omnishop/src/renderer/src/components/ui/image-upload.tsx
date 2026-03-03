@@ -5,9 +5,10 @@
  * Accepts a current URL for preview and calls onUpload with the new secure URL.
  */
 import React, { useRef, useState, useCallback } from 'react'
-import { Upload, X, Loader2, ImageIcon } from 'lucide-react'
+import { Upload, X, Loader2, ImageIcon, WifiOff } from 'lucide-react'
 import { uploadImage, type CloudinaryFolder } from '@/lib/cloudinaryService'
 import { ImageCropModal } from '@/components/ui/image-crop-modal'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { cn } from '@/lib/utils'
 
 const ASPECT_NUMBERS: Record<'square' | 'banner' | 'product', number> = {
@@ -59,6 +60,9 @@ export function ImageUpload({
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [cropSrc, setCropSrc] = useState<string | null>(null)
+  const isOnline = useNetworkStatus()
+  // Combine all disabled conditions into one flag used throughout the component
+  const isDisabled = disabled || uploading || !isOnline
 
   const processFile = useCallback(
     async (file: File) => {
@@ -147,26 +151,32 @@ export function ImageUpload({
       {/* Drop zone */}
       <div
         role="button"
-        tabIndex={disabled ? -1 : 0}
+        tabIndex={isDisabled ? -1 : 0}
         aria-label={label}
-        onClick={() => !disabled && !uploading && inputRef.current?.click()}
+        onClick={() => !isDisabled && inputRef.current?.click()}
         onKeyDown={(e) => {
-          if (!disabled && !uploading && (e.key === 'Enter' || e.key === ' '))
-            inputRef.current?.click()
+          if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) inputRef.current?.click()
         }}
-        onDrop={!disabled ? handleDrop : undefined}
-        onDragOver={!disabled ? handleDragOver : undefined}
-        onDragLeave={!disabled ? handleDragLeave : undefined}
+        onDrop={!isDisabled ? handleDrop : undefined}
+        onDragOver={!isDisabled ? handleDragOver : undefined}
+        onDragLeave={!isDisabled ? handleDragLeave : undefined}
         className={cn(
           'relative w-full overflow-hidden rounded-lg border-2 border-dashed transition-colors',
           ASPECT_CLASSES[aspectRatio],
-          disabled
+          isDisabled
             ? 'cursor-not-allowed opacity-50'
             : 'cursor-pointer hover:border-primary/50 hover:bg-primary/5',
           dragging ? 'border-primary bg-primary/5' : 'border-border bg-muted/30',
           value && 'border-solid border-border'
         )}
       >
+        {/* Offline overlay — shown when internet is unavailable */}
+        {!isOnline && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-lg bg-background/80 backdrop-blur-sm">
+            <WifiOff className="size-5 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">No internet connection</p>
+          </div>
+        )}
         {/* Preview */}
         {value && (
           <img
@@ -211,7 +221,7 @@ export function ImageUpload({
         )}
 
         {/* Clear button */}
-        {value && !uploading && !disabled && (
+        {value && !isDisabled && (
           <button
             type="button"
             onClick={handleClear}
@@ -243,7 +253,7 @@ export function ImageUpload({
         accept={ACCEPTED_TYPES.join(',')}
         className="sr-only"
         onChange={handleFileChange}
-        disabled={disabled || uploading}
+        disabled={isDisabled}
       />
     </div>
   )
