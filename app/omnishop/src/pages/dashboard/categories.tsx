@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   Tag,
   Plus,
@@ -16,6 +16,7 @@ import { z } from 'zod'
 
 import { useCategoryStore } from '@/store/useCategoryStore'
 import { CSVImportDialog } from '@/components/csv-import-dialog'
+import { DeletionProgressDialog } from '@/components/deletion-progress-dialog'
 import { CSVTemplateDialog } from '@/components/ui/csv-template-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -274,6 +275,11 @@ export default function CategoriesPage(): React.JSX.Element {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeletedCount, setBulkDeletedCount] = useState(0)
+  const [bulkDeleteTotal, setBulkDeleteTotal] = useState(0)
+  const [bulkDeleteElapsed, setBulkDeleteElapsed] = useState(0)
+  const bulkDeleteStartRef = useRef<number>(0)
+  const bulkDeleteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   // Template dialog
@@ -328,31 +334,62 @@ export default function CategoriesPage(): React.JSX.Element {
     e.target.value = ''
   }
 
-  const handleCategoryImport = async (rows: CategoryImportRow[]): Promise<void> => {
+  const handleCategoryImport = async (
+    rows: CategoryImportRow[],
+    onProgress: (done: number, total: number) => void
+  ): Promise<void> => {
     // Build name → id from existing categories
     const nameToId = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
+    const total = rows.length
+    let done = 0
 
     // First pass: top-level categories
     for (const row of rows.filter((r) => !r.parentName)) {
       const newId = await add({ name: row.name, color: row.color, parentId: null })
       nameToId.set(row.name.toLowerCase(), newId)
+      onProgress(++done, total)
     }
 
     // Second pass: children (resolve parentId from the now-expanded map)
     for (const row of rows.filter((r) => r.parentName)) {
       const parentId = nameToId.get(row.parentName.toLowerCase()) ?? null
       await add({ name: row.name, color: row.color, parentId })
+      onProgress(++done, total)
     }
     setCsvImportResult(null)
   }
 
+  useEffect(() => {
+    if (bulkDeleting) {
+      bulkDeleteStartRef.current = Date.now()
+      setBulkDeleteElapsed(0)
+      bulkDeleteTimerRef.current = setInterval(() => {
+        setBulkDeleteElapsed((Date.now() - bulkDeleteStartRef.current) / 1000)
+      }, 100)
+    } else {
+      if (bulkDeleteTimerRef.current) {
+        clearInterval(bulkDeleteTimerRef.current)
+        bulkDeleteTimerRef.current = null
+      }
+    }
+    return () => {
+      if (bulkDeleteTimerRef.current) clearInterval(bulkDeleteTimerRef.current)
+    }
+  }, [bulkDeleting])
+
   const handleBulkDelete = async (): Promise<void> => {
+    const ids = [...selectedIds]
+    setShowBulkDeleteConfirm(false)
     setBulkDeleting(true)
+    setBulkDeletedCount(0)
+    setBulkDeleteTotal(ids.length)
     try {
-      await Promise.all([...selectedIds].map((id) => remove(id)))
+      for (let i = 0; i < ids.length; i++) {
+        await remove(ids[i])
+        setBulkDeletedCount(i + 1)
+      }
       setSelectedIds(new Set())
       setSelectMode(false)
-      setShowBulkDeleteConfirm(false)
     } finally {
       setBulkDeleting(false)
     }
@@ -662,7 +699,10 @@ export default function CategoriesPage(): React.JSX.Element {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedIds.size} categories?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete {selectedIds.size} categor
+              {selectedIds.size !== 1 ? 'ies' : 'y'}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently remove {selectedIds.size} categor
               {selectedIds.size !== 1 ? 'ies' : 'y'}. Products assigned to them will become
@@ -670,17 +710,25 @@ export default function CategoriesPage(): React.JSX.Element {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleBulkDelete}
-              disabled={bulkDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+              Delete {selectedIds.size}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Bulk delete progress ── */}
+      <DeletionProgressDialog
+        open={bulkDeleting}
+        deleted={bulkDeletedCount}
+        total={bulkDeleteTotal}
+        elapsed={bulkDeleteElapsed}
+        label="category"
+      />
 
       {/* ── CSV import review ── */}
       {csvImportResult && (

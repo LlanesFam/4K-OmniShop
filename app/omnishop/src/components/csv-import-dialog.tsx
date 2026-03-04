@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { AlertCircle, AlertTriangle, CheckCircle2, FileText, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -10,12 +10,13 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog'
+import { cn, formatDuration } from '@/lib/utils'
 import type { ImportError } from '@/lib/csvService'
 
 interface CSVImportDialogProps<T extends { row: number; name: string; isDuplicate?: boolean }> {
   open: boolean
   onClose: () => void
-  onConfirm: (rows: T[]) => Promise<void>
+  onConfirm: (rows: T[], onProgress: (done: number, total: number) => void) => Promise<void>
   title: string
   valid: T[]
   errors: ImportError[]
@@ -36,18 +37,53 @@ export function CSVImportDialog<T extends { row: number; name: string; isDuplica
   renderPreviewRow
 }: CSVImportDialogProps<T>): React.JSX.Element {
   const [importing, setImporting] = useState(false)
+  const [importedCount, setImportedCount] = useState(0)
+  const [importTotal, setImportTotal] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
+  const startTimeRef = useRef<number>(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Tick elapsed every 100ms while importing
+  useEffect(() => {
+    if (importing) {
+      startTimeRef.current = Date.now()
+      setElapsed(0)
+      timerRef.current = setInterval(() => {
+        setElapsed((Date.now() - startTimeRef.current) / 1000)
+      }, 100)
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [importing])
 
   // Split valid rows into importable and duplicates
   const importRows = valid.filter((r) => !r.isDuplicate)
   const dupRows = valid.filter((r) => r.isDuplicate)
 
+  const pct = importTotal > 0 ? Math.round((importedCount / importTotal) * 100) : 0
+  const rate = importedCount > 0 ? elapsed / importedCount : 0
+  const estimatedRemaining = importTotal > 0 ? rate * (importTotal - importedCount) : 0
+
   const handleConfirm = async (): Promise<void> => {
     setImporting(true)
+    setImportedCount(0)
+    setImportTotal(importRows.length)
     try {
-      await onConfirm(importRows)
+      await onConfirm(importRows, (done, total) => {
+        setImportedCount(done)
+        setImportTotal(total)
+      })
       onClose()
     } finally {
       setImporting(false)
+      setImportedCount(0)
+      setImportTotal(0)
     }
   }
 
@@ -191,6 +227,51 @@ export function CSVImportDialog<T extends { row: number; name: string; isDuplica
               No valid rows found. Please fix the issues in your file and try again.
             </AlertDescription>
           </Alert>
+        )}
+
+        {/* ── Import progress ── */}
+        {importing && (
+          <div className="shrink-0 rounded-lg border bg-muted/20 px-4 py-3 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                Importing <span className="font-semibold text-foreground">{importedCount}</span>
+                {' of '}
+                <span className="font-semibold text-foreground">{importTotal}</span>
+                {' rows…'}
+              </span>
+              <span className="font-semibold tabular-nums text-foreground">{pct}%</span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  'h-full rounded-full bg-primary transition-all duration-150',
+                  pct < 100 && 'animate-pulse'
+                )}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+              <span>
+                Elapsed:{' '}
+                <span className="font-medium text-foreground">{formatDuration(elapsed)}</span>
+              </span>
+              {importedCount > 0 && importedCount < importTotal && (
+                <span>
+                  Est. remaining:{' '}
+                  <span className="font-medium text-foreground">
+                    {formatDuration(estimatedRemaining)}
+                  </span>
+                </span>
+              )}
+              {importedCount === importTotal && importTotal > 0 && (
+                <span className="text-green-400 font-medium">Finishing up…</span>
+              )}
+            </div>
+          </div>
         )}
 
         <DialogFooter className="shrink-0 pt-2">

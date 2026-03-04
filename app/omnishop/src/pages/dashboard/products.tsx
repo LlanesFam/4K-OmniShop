@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import {
   Package,
   Plus,
@@ -28,6 +28,7 @@ import { useUIStore } from '@/store/useUIStore'
 import { ProductCard } from '@/components/product-card'
 import { ProductDetailModal } from '@/components/product-detail-modal'
 import { CSVImportDialog } from '@/components/csv-import-dialog'
+import { DeletionProgressDialog } from '@/components/deletion-progress-dialog'
 import { CSVTemplateDialog } from '@/components/ui/csv-template-dialog'
 import { ImageUpload } from '@/components/ui/image-upload'
 import { Button } from '@/components/ui/button'
@@ -539,6 +540,11 @@ export default function ProductsPage(): React.JSX.Element {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeletedCount, setBulkDeletedCount] = useState(0)
+  const [bulkDeleteTotal, setBulkDeleteTotal] = useState(0)
+  const [bulkDeleteElapsed, setBulkDeleteElapsed] = useState(0)
+  const bulkDeleteStartRef = useRef<number>(0)
+  const bulkDeleteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [showTemplateDialog, setShowTemplateDialog] = useState(false)
   const { productsViewMode: viewMode, setProductsViewMode: setViewMode } = useUIStore()
@@ -558,6 +564,27 @@ export default function ProductsPage(): React.JSX.Element {
     }
     return list
   }, [products, search, filterCategoryId])
+
+  // How many of the currently visible products are selected
+  const selectedInView = useMemo(
+    () => filtered.filter((p) => selectedIds.has(p.id)).length,
+    [filtered, selectedIds]
+  )
+  const allVisibleSelected = filtered.length > 0 && selectedInView === filtered.length
+  const isFiltered = !!(filterCategoryId || search.trim())
+
+  // Adds or removes only the visible subset — keeps off-screen selections intact
+  const toggleSelectAllVisible = (): void => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        filtered.forEach((p) => next.delete(p.id))
+      } else {
+        filtered.forEach((p) => next.add(p.id))
+      }
+      return next
+    })
+  }
 
   const openAdd = (): void => {
     setEditing(null)
@@ -613,9 +640,13 @@ export default function ProductsPage(): React.JSX.Element {
     e.target.value = ''
   }
 
-  const handleProductImport = async (rows: ProductImportRow[]): Promise<void> => {
+  const handleProductImport = async (
+    rows: ProductImportRow[],
+    onProgress: (done: number, total: number) => void
+  ): Promise<void> => {
     const catNameToId = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]))
-    for (const row of rows) {
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
       const categoryId = row.categoryName
         ? (catNameToId.get(row.categoryName.toLowerCase()) ?? null)
         : null
@@ -632,17 +663,42 @@ export default function ProductsPage(): React.JSX.Element {
         imagePublicId: '',
         status: row.status
       })
+      onProgress(i + 1, rows.length)
     }
     setCsvImportResult(null)
   }
 
+  useEffect(() => {
+    if (bulkDeleting) {
+      bulkDeleteStartRef.current = Date.now()
+      setBulkDeleteElapsed(0)
+      bulkDeleteTimerRef.current = setInterval(() => {
+        setBulkDeleteElapsed((Date.now() - bulkDeleteStartRef.current) / 1000)
+      }, 100)
+    } else {
+      if (bulkDeleteTimerRef.current) {
+        clearInterval(bulkDeleteTimerRef.current)
+        bulkDeleteTimerRef.current = null
+      }
+    }
+    return () => {
+      if (bulkDeleteTimerRef.current) clearInterval(bulkDeleteTimerRef.current)
+    }
+  }, [bulkDeleting])
+
   const handleBulkDelete = async (): Promise<void> => {
+    const ids = [...selectedIds]
+    setShowBulkDeleteConfirm(false)
     setBulkDeleting(true)
+    setBulkDeletedCount(0)
+    setBulkDeleteTotal(ids.length)
     try {
-      await Promise.all([...selectedIds].map((id) => remove(id)))
+      for (let i = 0; i < ids.length; i++) {
+        await remove(ids[i])
+        setBulkDeletedCount(i + 1)
+      }
       setSelectedIds(new Set())
       setSelectMode(false)
-      setShowBulkDeleteConfirm(false)
     } finally {
       setBulkDeleting(false)
     }
@@ -721,23 +777,46 @@ export default function ProductsPage(): React.JSX.Element {
 
       {/* ── Bulk action bar ── */}
       {selectMode && (
-        <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-2.5">
-          <span className="text-sm text-muted-foreground flex-1">
-            {selectedIds.size === 0 ? 'Click cards to select' : `${selectedIds.size} selected`}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setSelectedIds(
-                selectedIds.size === filtered.length
-                  ? new Set()
-                  : new Set(filtered.map((p) => p.id))
-              )
-            }
-          >
-            {selectedIds.size === filtered.length ? 'Deselect all' : 'Select all'}
+        <div className="flex items-center gap-2.5 rounded-lg border bg-card px-4 py-2.5 flex-wrap">
+          {/* Count */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-sm font-medium">
+              {selectedIds.size === 0 ? (
+                <span className="text-muted-foreground">Click cards to select</span>
+              ) : (
+                <>
+                  <span className="text-foreground">{selectedIds.size} selected</span>
+                  {isFiltered && selectedInView < selectedIds.size && (
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · <span className="text-foreground">{selectedInView}</span> in view
+                    </span>
+                  )}
+                </>
+              )}
+            </span>
+          </div>
+
+          {/* Select / deselect visible */}
+          <Button variant="outline" size="sm" onClick={toggleSelectAllVisible}>
+            {allVisibleSelected
+              ? `Deselect visible (${selectedInView})`
+              : `Select all visible (${filtered.length})`}
           </Button>
+
+          {/* Clear all — shown only when off-screen selections exist */}
+          {selectedIds.size > selectedInView && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear all ({selectedIds.size})
+            </Button>
+          )}
+
+          {/* Delete */}
           {selectedIds.size > 0 && (
             <Button
               variant="destructive"
@@ -1251,17 +1330,25 @@ export default function ProductsPage(): React.JSX.Element {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleBulkDelete}
-              disabled={bulkDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+              Delete {selectedIds.size}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Bulk delete progress ── */}
+      <DeletionProgressDialog
+        open={bulkDeleting}
+        deleted={bulkDeletedCount}
+        total={bulkDeleteTotal}
+        elapsed={bulkDeleteElapsed}
+        label="product"
+      />
 
       {/* ── Delete confirm ── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
