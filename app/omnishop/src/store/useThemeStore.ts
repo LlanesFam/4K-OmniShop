@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useEffect, useState } from 'react'
+import { updateUserPreferences } from '@/lib/userPreferencesService'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,11 +102,21 @@ export const useThemeStore = create<ThemeState>()(
       setTheme: (theme) => {
         applyTheme(theme, get().colorTheme)
         set({ theme })
+        // Sync to Firestore (fire-and-forget — localStorage remains the source of truth for UI)
+        void import('@/store/useAuthStore').then(({ useAuthStore }) => {
+          const uid = useAuthStore.getState().user?.uid
+          if (uid) void updateUserPreferences(uid, { theme })
+        })
       },
 
       setColorTheme: (colorTheme) => {
         applyTheme(get().theme, colorTheme)
         set({ colorTheme })
+        // Sync to Firestore (fire-and-forget)
+        void import('@/store/useAuthStore').then(({ useAuthStore }) => {
+          const uid = useAuthStore.getState().user?.uid
+          if (uid) void updateUserPreferences(uid, { colorTheme })
+        })
       },
 
       resolvedTheme: () => {

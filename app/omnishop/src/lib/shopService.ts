@@ -52,6 +52,8 @@ export interface ShopProfile {
   logoUrl?: string
   /** Cloudinary secure URL for the shop banner */
   bannerUrl?: string
+  /** Cloudinary secure URL used as the fallback image for products with no photo */
+  defaultProductImageUrl?: string
   /**
    * True once the seller has completed the onboarding checklist.
    * Checklist: logo uploaded + banner uploaded + first product added.

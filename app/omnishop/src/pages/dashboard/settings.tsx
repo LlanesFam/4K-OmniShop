@@ -13,7 +13,11 @@ import {
   Palette,
   MonitorSmartphone,
   Bell,
-  Camera
+  Camera,
+  Power,
+  AlertCircle,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react'
 import { updateProfile } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
@@ -29,10 +33,23 @@ import {
   type ShopCategory
 } from '@/lib/shopService'
 import { uploadImage } from '@/lib/cloudinaryService'
+import { updateUserPreferences } from '@/lib/userPreferencesService'
+import { isAutostartEnabled, setAutostart } from '@/lib/tauri'
 import { ImageUpload } from '@/components/ui/image-upload'
 import { ImageCropModal } from '@/components/ui/image-crop-modal'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 
 // ─── Theme Toggle ─────────────────────────────────────────────────────────────
@@ -292,6 +309,9 @@ function StoreTab(): React.JSX.Element {
   const [subCategories, setSubCategories] = useState<string[]>(shop?.subCategories ?? [])
   const [logoUrl, setLogoUrl] = useState(shop?.logoUrl ?? '')
   const [bannerUrl, setBannerUrl] = useState(shop?.bannerUrl ?? '')
+  const [defaultProductImageUrl, setDefaultProductImageUrl] = useState(
+    shop?.defaultProductImageUrl ?? ''
+  )
   // Admins who haven't set up a shop yet default to the "OmniShop" name.
   const [shopName, setShopName] = useState(shop?.shopName ?? (isAdmin ? 'OmniShop' : ''))
   const [description, setDescription] = useState(shop?.description ?? '')
@@ -318,6 +338,7 @@ function StoreTab(): React.JSX.Element {
     setSubCategories(shop.subCategories ?? [])
     setLogoUrl(shop.logoUrl ?? '')
     setBannerUrl(shop.bannerUrl ?? '')
+    setDefaultProductImageUrl(shop.defaultProductImageUrl ?? '')
     setShopName(shop.shopName ?? '')
     setDescription(shop.description ?? '')
     setPhone(shop.phone ?? '')
@@ -334,6 +355,7 @@ function StoreTab(): React.JSX.Element {
         subCategories,
         logoUrl: logoUrl || undefined,
         bannerUrl: bannerUrl || undefined,
+        defaultProductImageUrl: defaultProductImageUrl || undefined,
         shopName,
         description,
         phone,
@@ -499,6 +521,25 @@ function StoreTab(): React.JSX.Element {
             folder="logos"
             aspectRatio="square"
             label="Upload logo"
+            className="w-28 shrink-0"
+            cropEnabled
+          />
+        </div>
+
+        {/* Default Product Image */}
+        <div className="flex items-start justify-between gap-4 px-6 py-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Default Product Image</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Shown for products that have no photo. Leave empty to use the OmniShop logo.
+            </p>
+          </div>
+          <ImageUpload
+            value={defaultProductImageUrl}
+            onUpload={setDefaultProductImageUrl}
+            folder="product-placeholders"
+            aspectRatio="square"
+            label="Upload placeholder"
             className="w-28 shrink-0"
             cropEnabled
           />
@@ -759,6 +800,285 @@ function AccountTab(): React.JSX.Element {
   )
 }
 
+// ─── Notifications Tab ────────────────────────────────────────────────────────
+
+function NotificationsTab(): React.JSX.Element {
+  const { user, profile } = useAuthStore()
+  const isAdmin = profile?.role === 'admin'
+  const [saving, setSaving] = useState(false)
+
+  const notifPrefs = profile?.preferences?.notifications ?? {}
+  const [updateAvailable, setUpdateAvailable] = useState(notifPrefs.updateAvailable ?? true)
+  const [newUserApproval, setNewUserApproval] = useState(notifPrefs.newUserApproval ?? true)
+
+  // Sync local state when prefs arrive from Firestore
+  useEffect(() => {
+    const p = profile?.preferences?.notifications
+    if (p) {
+      setUpdateAvailable(p.updateAvailable ?? true)
+      setNewUserApproval(p.newUserApproval ?? true)
+    }
+  }, [profile?.preferences?.notifications])
+
+  const handleSave = async (): Promise<void> => {
+    if (!user) return
+    setSaving(true)
+    try {
+      await updateUserPreferences(user.uid, {
+        notifications: {
+          updateAvailable,
+          newUserApproval: isAdmin ? newUserApproval : undefined
+        }
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+      <div className="divide-y">
+        <SettingRow
+          label="Update Available"
+          description="Get a system notification when a new version of OmniShop is ready to install."
+          control={<Switch checked={updateAvailable} onCheckedChange={setUpdateAvailable} />}
+        />
+        {isAdmin && (
+          <SettingRow
+            label="New User Approval"
+            description="Get notified when a new user registers and is waiting for your approval."
+            control={<Switch checked={newUserApproval} onCheckedChange={setNewUserApproval} />}
+          />
+        )}
+        <div className="flex items-center justify-end gap-4 px-6 py-4 bg-muted/20">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void handleSave()}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold transition-colors',
+              'bg-primary text-primary-foreground hover:bg-primary/90',
+              'disabled:cursor-not-allowed disabled:opacity-60'
+            )}
+          >
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+            {saving ? 'Saving…' : 'Save preferences'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── System Tab ───────────────────────────────────────────────────────────────
+
+function SystemTab(): React.JSX.Element {
+  const { user, profile } = useAuthStore()
+  const [autostart, setAutostartState] = useState(false)
+  const [autostartLoading, setAutostartLoading] = useState(true)
+  const [autostartSaving, setAutostartSaving] = useState(false)
+
+  const autoUpdate = profile?.preferences?.autoUpdate ?? true
+  const [autoUpdateState, setAutoUpdateState] = useState(autoUpdate)
+  const [savingAutoUpdate, setSavingAutoUpdate] = useState(false)
+
+  // Sync autoUpdate from Firestore prefs
+  useEffect(() => {
+    const v = profile?.preferences?.autoUpdate
+    if (v !== undefined) setAutoUpdateState(v)
+  }, [profile?.preferences?.autoUpdate])
+
+  // Read current autostart state from OS on mount
+  useEffect(() => {
+    void isAutostartEnabled().then((enabled) => {
+      setAutostartState(enabled)
+      setAutostartLoading(false)
+    })
+  }, [])
+
+  const handleAutostartChange = async (checked: boolean): Promise<void> => {
+    setAutostartSaving(true)
+    try {
+      await setAutostart(checked)
+      setAutostartState(checked)
+    } finally {
+      setAutostartSaving(false)
+    }
+  }
+
+  const handleAutoUpdateChange = async (checked: boolean): Promise<void> => {
+    if (!user) return
+    setSavingAutoUpdate(true)
+    setAutoUpdateState(checked)
+    try {
+      await updateUserPreferences(user.uid, { autoUpdate: checked })
+    } finally {
+      setSavingAutoUpdate(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+      <div className="divide-y">
+        <SettingRow
+          label="Launch at Login"
+          description="Automatically start OmniShop when you log in to Windows."
+          control={
+            autostartLoading ? (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="flex items-center gap-2">
+                {autostartSaving && (
+                  <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                )}
+                <Switch
+                  checked={autostart}
+                  onCheckedChange={(v) => void handleAutostartChange(v)}
+                  disabled={autostartSaving}
+                />
+              </div>
+            )
+          }
+        />
+        <SettingRow
+          label="Auto-Update"
+          description="Automatically download updates in the background. Disabling this means you'll need to update manually."
+          control={
+            <div className="flex items-center gap-2">
+              {savingAutoUpdate && (
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+              )}
+              <Switch
+                checked={autoUpdateState}
+                onCheckedChange={(v) => void handleAutoUpdateChange(v)}
+                disabled={savingAutoUpdate}
+              />
+            </div>
+          }
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Danger Zone Tab ──────────────────────────────────────────────────────────
+
+function DangerTab(): React.JSX.Element {
+  const { user, deleteAccount } = useAuthStore()
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [emailInput, setEmailInput] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const expectedEmail = user?.email ?? ''
+  const emailMatches = emailInput.trim().toLowerCase() === expectedEmail.toLowerCase()
+
+  const handleDelete = async (): Promise<void> => {
+    if (!emailMatches) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteAccount()
+      // If we're still here (email/password flow), auth listener clears state + redirects
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete account.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <>
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="size-5" />
+              Delete Account
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes your account. Your shop will be archived for 30 days and then
+              removed automatically.
+              <br />
+              <span className="mt-2 block font-medium text-foreground">
+                Type your email address to confirm:
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-1 py-2">
+            <Input
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder={expectedEmail}
+              className="text-sm"
+              autoComplete="off"
+            />
+            {deleteError && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
+                <AlertCircle className="size-3.5 shrink-0" />
+                {deleteError}
+              </p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!emailMatches || deleting}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleDelete()
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="size-3.5 mr-1.5" />
+                  Delete my account
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="rounded-xl border border-destructive/40 bg-card text-card-foreground shadow-sm overflow-hidden">
+        <div className="flex items-start gap-3 border-b border-destructive/20 bg-destructive/5 px-6 py-4">
+          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <div>
+            <p className="text-sm font-semibold text-destructive">Danger Zone</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Actions here are permanent or have significant consequences. Proceed carefully.
+            </p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-destructive/10">
+          <SettingRow
+            label="Delete Account"
+            description="Permanently deletes your Firebase Auth account. Your shop data will be archived for 30 days."
+            align="start"
+            control={
+              <button
+                type="button"
+                onClick={() => setShowConfirm(true)}
+                className="inline-flex items-center gap-2 rounded-md border border-destructive/60 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+              >
+                <Trash2 className="size-3.5" />
+                Delete account
+              </button>
+            }
+          />
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -766,7 +1086,9 @@ const TABS = [
   { value: 'account', label: 'Account', icon: User },
   { value: 'appearance', label: 'Appearance', icon: Palette },
   { value: 'display', label: 'Display', icon: MonitorSmartphone },
-  { value: 'notifications', label: 'Notifications', icon: Bell }
+  { value: 'notifications', label: 'Notifications', icon: Bell },
+  { value: 'system', label: 'System', icon: Power },
+  { value: 'danger', label: 'Danger', icon: ShieldAlert }
 ]
 
 export default function SettingsPage(): React.JSX.Element {
@@ -837,19 +1159,15 @@ export default function SettingsPage(): React.JSX.Element {
         </TabsContent>
 
         <TabsContent value="notifications" className="mt-4">
-          <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
-            <div className="divide-y">
-              <SettingRow
-                label="Desktop Notifications"
-                description="Show system notifications for new orders and approvals."
-                control={
-                  <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    Coming soon
-                  </span>
-                }
-              />
-            </div>
-          </div>
+          <NotificationsTab />
+        </TabsContent>
+
+        <TabsContent value="system" className="mt-4">
+          <SystemTab />
+        </TabsContent>
+
+        <TabsContent value="danger" className="mt-4">
+          <DangerTab />
         </TabsContent>
       </Tabs>
     </div>

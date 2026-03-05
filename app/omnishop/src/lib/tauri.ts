@@ -126,3 +126,54 @@ export async function applyDisplay(
     await win.setDecorations(mode !== 'borderless')
   }
 }
+
+// ── Autostart ─────────────────────────────────────────────────────────────────
+
+export async function isAutostartEnabled(): Promise<boolean> {
+  try {
+    const { isEnabled } = await import('@tauri-apps/plugin-autostart')
+    return await isEnabled()
+  } catch {
+    return false
+  }
+}
+
+export async function setAutostart(enabled: boolean): Promise<void> {
+  try {
+    const { enable, disable } = await import('@tauri-apps/plugin-autostart')
+    if (enabled) {
+      await enable()
+    } else {
+      await disable()
+    }
+  } catch {
+    // Plugin unavailable in dev / web — ignore
+  }
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export async function requestNotificationPermission(): Promise<boolean> {
+  try {
+    const { isPermissionGranted, requestPermission } =
+      await import('@tauri-apps/plugin-notification')
+    let granted = await isPermissionGranted()
+    if (!granted) {
+      const permission = await requestPermission()
+      granted = permission === 'granted'
+    }
+    return granted
+  } catch {
+    return false
+  }
+}
+
+export async function sendNativeNotification(title: string, body: string): Promise<void> {
+  try {
+    const { sendNotification } = await import('@tauri-apps/plugin-notification')
+    await sendNotification({ title, body })
+  } catch {
+    // Plugin unavailable in dev / web — fall back silently
+    console.info(`[notification] ${title}: ${body}`)
+  }
+}

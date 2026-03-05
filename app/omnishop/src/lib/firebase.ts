@@ -1,5 +1,9 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, setPersistence, indexedDBLocalPersistence } from 'firebase/auth'
+import {
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserPopupRedirectResolver
+} from 'firebase/auth'
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -28,13 +32,21 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
 
-export const auth = getAuth(app)
-
-// Use IndexedDB for auth token persistence so the stored token survives across
-// app restarts with the same localhost port (localStorage is also origin-keyed
-// but less reliable in Electron's Chromium). This is non-blocking; sign-in
-// state is resolved asynchronously by onAuthStateChanged as usual.
-setPersistence(auth, indexedDBLocalPersistence).catch(console.error)
+// Use initializeAuth instead of getAuth so we can set BOTH the persistence
+// strategy and the popup/redirect resolver at construction time.
+//
+// persistence: IndexedDB survives app restarts and is more reliable than
+//   localStorage in WebView2 (Tauri / Electron).
+//
+// popupRedirectResolver: browserPopupRedirectResolver stores the OAuth
+//   handshake state in localStorage instead of sessionStorage. This is
+//   critical for WebView2 where sessionStorage is NOT shared between the
+//   main frame and cross-origin auth iframes, causing the
+//   "missing initial state" error when signInWithPopup is used.
+export const auth = initializeAuth(app, {
+  persistence: indexedDBLocalPersistence,
+  popupRedirectResolver: browserPopupRedirectResolver
+})
 
 /**
  * Firestore with IndexedDB-backed persistent cache.

@@ -45,3 +45,20 @@ export const useDisplayStore = create<DisplayState>()(
     }
   )
 )
+
+/**
+ * Re-applies the persisted display mode and resolution on app launch.
+ * Call this once in main.tsx alongside `initTheme()` so the window
+ * snaps to the correct size / fullscreen state before the first render.
+ * Wrapped in a try/catch so a missing capability or early-init race
+ * never crashes the app — the display will correct itself on first
+ * user interaction with the Settings page.
+ */
+export function initDisplay(): void {
+  try {
+    useDisplayStore.getState().applyDisplaySettings()
+  } catch {
+    // Tauri IPC not yet ready — safe to ignore; display applies when
+    // capabilities are confirmed and the store's setMode fires next time.
+  }
+}

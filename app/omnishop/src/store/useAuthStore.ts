@@ -9,11 +9,27 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  reauthenticateWithRedirect,
+  deleteUser,
   reload
 } from 'firebase/auth'
-import { doc, getDoc, runTransaction, serverTimestamp, type Timestamp } from 'firebase/firestore'
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  collection,
+  where,
+  serverTimestamp,
+  type Timestamp
+} from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
+import { subscribeUserPreferences } from '@/lib/userPreferencesService'
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -32,6 +48,18 @@ export interface UserProfile {
   /** Set by an admin when the account is rejected. */
   rejectionReason?: string
   createdAt: Timestamp
+  /** User preferences synced from Firestore (theme, notifications, etc.) */
+  preferences?: UserPreferences
+}
+
+export interface UserPreferences {
+  theme?: 'light' | 'dark' | 'system'
+  colorTheme?: string
+  notifications?: {
+    updateAvailable?: boolean
+    newUserApproval?: boolean
+  }
+  autoUpdate?: boolean
 }
 
 export interface AuthError {
@@ -65,6 +93,11 @@ interface AuthState {
   refreshProfile: () => Promise<void>
   resendVerificationEmail: () => Promise<void>
   sendPasswordReset: (email: string) => Promise<void>
+  /**
+   * Permanently deletes the current user's Auth account and archives the shop.
+   * Requires a recent Google re-authentication for Google users.
+   */
+  deleteAccount: () => Promise<void>
   clearError: () => void
 }
 
@@ -89,6 +122,7 @@ function formatAuthError(code: string): string {
     'auth/popup-closed-by-user': 'Sign-in popup was closed.',
     'auth/popup-blocked': 'Popup was blocked. Please allow popups and try again.',
     'auth/cancelled-popup-request': '',
+    'auth/redirect-cancelled-by-user': '',
     'auth/user-disabled': 'This account has been disabled. Contact support.',
     'auth/requires-recent-login': 'Please log out and log in again to continue.'
   }
@@ -169,11 +203,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /**
-   * Initiates Google OAuth sign-in with a popup.
-   * Creates a pending Firestore profile for first-time Google users.
-   *
-   * NOTE (Electron): Popups require `allowpopups` on the BrowserWindow webPreferences
-   * or they will be silently blocked. See src/main/index.ts.
+   * Initiates Google OAuth sign-in via a full-page redirect.
+   * The Tauri WebView navigates to Google's auth page; on return,
+   * `getRedirectResult` (called at module level) picks up the credential
+   * and creates a pending Firestore profile for first-time Google users.
    */
   loginWithGoogle: async () => {
     set({ error: null })
@@ -181,49 +214,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const provider = new GoogleAuthProvider()
       // Force the account-picker every time so users can switch accounts
       provider.setCustomParameters({ prompt: 'select_account' })
-      const cred = await signInWithPopup(auth, provider)
-      // Create a pending profile if this is a new Google sign-in
-      const existing = await fetchUserProfile(cred.user.uid)
-      if (!existing) {
-        await createUserProfile(
-          cred.user.uid,
-          cred.user.displayName ?? 'Google User',
-          cred.user.email ?? ''
-        )
-      }
+      await signInWithRedirect(auth, provider)
+      // The webview will navigate away; execution does not continue past here.
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? 'auth/internal-error'
-      // User intentionally closed the popup — silently ignore
-      if (code === 'auth/popup-closed-by-user') return
-      // Firebase internal state conflict (common right after update restart while
-      // auth is still restoring the previous session from IndexedDB). Retry once
-      // after a short delay to let the SDK settle.
-      if (code === 'auth/cancelled-popup-request') {
-        await new Promise((r) => setTimeout(r, 1200))
-        try {
-          const provider2 = new GoogleAuthProvider()
-          provider2.setCustomParameters({ prompt: 'select_account' })
-          const cred2 = await signInWithPopup(auth, provider2)
-          const existing2 = await fetchUserProfile(cred2.user.uid)
-          if (!existing2) {
-            await createUserProfile(
-              cred2.user.uid,
-              cred2.user.displayName ?? 'Google User',
-              cred2.user.email ?? ''
-            )
-          }
-          return
-        } catch (retryErr: unknown) {
-          const retryCode = (retryErr as { code?: string }).code ?? 'auth/internal-error'
-          if (
-            retryCode === 'auth/popup-closed-by-user' ||
-            retryCode === 'auth/cancelled-popup-request'
-          )
-            return
-          set({ error: { code: retryCode, message: formatAuthError(retryCode) } })
-          throw retryErr
-        }
-      }
+      if (code === 'auth/redirect-cancelled-by-user') return
       set({ error: { code, message: formatAuthError(code) } })
       throw err
     }
@@ -315,21 +310,151 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ error: { code, message: formatAuthError(code) } })
       throw err
     }
+  },
+
+  /**
+   * Permanently deletes the current user's Auth account.
+   * For Google users, triggers `reauthenticateWithRedirect` first if the
+   * session is too old (Firebase requires recent login for account deletion).
+   * Also archives the shop document: sets status → 'archived'.
+   */
+  deleteAccount: async () => {
+    const { user } = useAuthStore.getState()
+    if (!user) throw new Error('Not authenticated.')
+
+    try {
+      // Archive the shop before deleting auth so Firestore rules still allow the write
+      try {
+        await updateDoc(doc(db, 'shops', user.uid), {
+          status: 'archived',
+          archivedAt: serverTimestamp(),
+          archivedReason: 'account_deleted'
+        })
+      } catch {
+        // Shop might not exist yet — that's fine
+      }
+      // Remove the users/{uid} profile document
+      try {
+        await deleteDoc(doc(db, 'users', user.uid))
+      } catch {
+        // Best-effort
+      }
+      // Delete Firebase Auth account
+      await deleteUser(user)
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code ?? 'auth/internal-error'
+      // Session too old — Google users need to re-authenticate via redirect
+      if (code === 'auth/requires-recent-login') {
+        const isGoogle = user.providerData?.some((p) => p.providerId === 'google.com')
+        if (isGoogle) {
+          const provider = new GoogleAuthProvider()
+          await reauthenticateWithRedirect(user, provider)
+          return // Page will navigate away; user lands back and deletion resumes
+        }
+      }
+      set({ error: { code, message: formatAuthError(code) } })
+      throw err
+    }
   }
 }))
 
 // ─── Auth State Listener ─────────────────────────────────────────────────────
 
+/** Holds the active Firestore preferences subscription so we can cancel it on logout. */
+let _prefsUnsubscribe: (() => void) | null = null
+/** Holds the admin pending-users subscription so we can cancel it on logout. */
+let _pendingUsersUnsubscribe: (() => void) | null = null
+/** UIDs we've already notified this session — prevents duplicate toasts on re-subscription. */
+const _notifiedPendingUids = new Set<string>()
+
 /**
  * Fires once on startup and on every auth state change.
  * Fetches the Firestore UserProfile after confirming Firebase Auth resolves.
+ * Also subscribes to real-time preferences so theme / notification settings
+ * stay in sync across devices.
  */
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     useAuthStore.setState({ user, profileLoading: true })
     const profile = await fetchUserProfile(user.uid)
     useAuthStore.setState({ profile, loading: false, profileLoading: false })
+
+    // Subscribe to real-time preference updates and apply them to the theme store
+    _prefsUnsubscribe?.()
+    _prefsUnsubscribe = subscribeUserPreferences(user.uid, (prefs) => {
+      // Update the stored profile with latest preferences
+      useAuthStore.setState((s) => ({
+        profile: s.profile ? { ...s.profile, preferences: prefs } : s.profile
+      }))
+      // Apply theme preferences without triggering another Firestore write
+      // (import lazily to avoid module initialisation order issues)
+      void import('@/store/useThemeStore').then(({ applyTheme, useThemeStore }) => {
+        const store = useThemeStore.getState()
+        const theme = prefs.theme ?? store.theme
+        const colorTheme = prefs.colorTheme ?? store.colorTheme
+        // Only apply if actually different to avoid needless DOM thrash
+        if (theme !== store.theme || colorTheme !== store.colorTheme) {
+          applyTheme(
+            theme as Parameters<typeof applyTheme>[0],
+            colorTheme as Parameters<typeof applyTheme>[1]
+          )
+          useThemeStore.setState({
+            theme: theme as Parameters<typeof applyTheme>[0],
+            colorTheme: colorTheme as Parameters<typeof applyTheme>[1]
+          })
+        }
+      })
+    })
+
+    // Admin-only: watch for newly registered pending users and push a native notification
+    if (profile?.role === 'admin') {
+      _pendingUsersUnsubscribe?.()
+      _pendingUsersUnsubscribe = onSnapshot(
+        query(collection(db, 'users'), where('status', '==', 'pending')),
+        (snap) => {
+          snap.docChanges().forEach((change) => {
+            if (change.type !== 'added') return
+            const uid = change.doc.id
+            // Skip UIDs we've already notified this session (avoids duplicate alerts on re-sub)
+            if (_notifiedPendingUids.has(uid)) return
+            _notifiedPendingUids.add(uid)
+            const data = change.doc.data() as { displayName?: string }
+            void import('@/lib/notificationService').then(({ notifyNewUserPending }) => {
+              void notifyNewUserPending(data.displayName ?? 'A new user')
+            })
+          })
+        }
+      )
+    }
   } else {
+    _prefsUnsubscribe?.()
+    _prefsUnsubscribe = null
+    _pendingUsersUnsubscribe?.()
+    _pendingUsersUnsubscribe = null
+    _notifiedPendingUids.clear()
     useAuthStore.setState({ user: null, profile: null, loading: false, profileLoading: false })
   }
 })
+
+// ─── Google Redirect Result Handler ──────────────────────────────────────────
+
+/**
+ * Picks up the result of a `signInWithRedirect` call when the app relaunches
+ * after the Google OAuth flow.  Creates a pending Firestore profile for
+ * first-time Google sign-ins (same guarantee as the old popup path).
+ */
+getRedirectResult(auth)
+  .then(async (result) => {
+    if (!result?.user) return
+    const existing = await fetchUserProfile(result.user.uid)
+    if (!existing) {
+      await createUserProfile(
+        result.user.uid,
+        result.user.displayName ?? 'Google User',
+        result.user.email ?? ''
+      )
+    }
+  })
+  .catch(() => {
+    // No redirect result or already handled — safe to ignore
+  })

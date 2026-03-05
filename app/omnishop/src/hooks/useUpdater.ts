@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { useUpdaterStore } from '@/store/useUpdaterStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { setPendingUpdate, checkWhatsNewOnLaunch } from '@/lib/tauri'
+import { notifyUpdateAvailable } from '@/lib/notificationService'
 
 /**
  * Registers the Tauri updater and triggers the initial update check.
@@ -24,6 +26,10 @@ export function useUpdater(): void {
 
     // Skip auto-check during local Vite dev — no update server available
     if (import.meta.env.DEV) return
+
+    // Respect the user's auto-update preference (defaults to true when unset)
+    const autoUpdate = useAuthStore.getState().profile?.preferences?.autoUpdate
+    if (autoUpdate === false) return
 
     let cancelled = false
 
@@ -64,6 +70,8 @@ export function useUpdater(): void {
               version: update.version,
               releaseNotes: notes
             })
+            // Fire a native OS notification so the user knows it's ready
+            void notifyUpdateAvailable(update.version)
           }
         })
       } catch (err) {

@@ -3,6 +3,7 @@ import { Pencil, Trash2, Package, Wrench, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useShopStore } from '@/store/useShopStore'
 import type { Product, Category } from '@/lib/types'
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -41,6 +42,8 @@ export function ProductCard({
   compact = false
 }: ProductCardProps): React.JSX.Element {
   const isService = product.type === 'service'
+  const { shop } = useShopStore()
+  const placeholderUrl = shop?.defaultProductImageUrl ?? null
 
   return (
     <div
@@ -68,6 +71,12 @@ export function ProductCard({
             src={product.imageUrl}
             alt={product.name}
             className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : placeholderUrl ? (
+          <img
+            src={placeholderUrl}
+            alt="Product placeholder"
+            className="size-full object-cover opacity-60"
           />
         ) : (
           <div className="size-full flex items-center justify-center text-muted-foreground/30">
