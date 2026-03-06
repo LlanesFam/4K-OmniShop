@@ -835,15 +835,15 @@ export default function StoragePage(): React.JSX.Element {
   ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="w-full flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-          <Archive className="size-5 text-primary" />
-        </div>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold">Storage</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Archive className="size-6" />
+            Storage
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
             Track raw materials, supplies, and stock levels
           </p>
         </div>
