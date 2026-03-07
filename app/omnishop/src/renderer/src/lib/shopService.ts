@@ -12,10 +12,17 @@ import {
   updateDoc,
   onSnapshot,
   serverTimestamp,
-  type Unsubscribe
+  type Unsubscribe,
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+  runTransaction
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { Timestamp } from 'firebase/firestore'
+import type { UserProfile, StoreRole } from '@/store/useAuthStore'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +66,24 @@ export interface ShopProfile {
   onboardingComplete?: boolean
   createdAt: Timestamp
   updatedAt: Timestamp
+}
+
+/**
+ * Unique codes for inviting new members to a shop.
+ * Stored in `inviteCodes/{code}`.
+ */
+export interface InviteCode {
+  code: string
+  shopId: string
+  createdBy: string
+  /** 'owner' or 'member' — defaults to 'member' for invites. */
+  role: 'member' | 'owner'
+  useCount: number
+  maxUseCount: number
+  expiresAt: Timestamp | null
+  /** UIDs of users who have consumed this code. */
+  usedBy: string[]
+  createdAt: Timestamp
 }
 
 export const CATEGORY_TAXONOMY: Record<
@@ -198,8 +223,10 @@ export function subscribeToShopProfile(
 ): Unsubscribe {
   return onSnapshot(
     doc(db, 'shops', uid),
-    (snap) => callback(snap.exists() ? (snap.data() as ShopProfile) : null),
-    (err) => onError?.(err)
+    (snap) => {
+      callback(snap.exists() ? (snap.data() as ShopProfile) : null)
+    },
+    onError
   )
 }
 
@@ -210,11 +237,22 @@ export async function createShopProfile(
   uid: string,
   data: Omit<ShopProfile, 'uid' | 'createdAt' | 'updatedAt'>
 ): Promise<void> {
-  await setDoc(doc(db, 'shops', uid), {
-    ...data,
-    uid,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+  const shopRef = doc(db, 'shops', uid)
+  const userRef = doc(db, 'users', uid)
+
+  await runTransaction(db, async (tx) => {
+    tx.set(shopRef, {
+      ...data,
+      uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    })
+
+    tx.update(userRef, {
+      storeRole: 'owner' as StoreRole,
+      shopId: uid,
+      shopOwnerUid: uid
+    })
   })
 }
 
@@ -226,5 +264,122 @@ export async function updateShopProfile(
   await updateDoc(doc(db, 'shops', uid), {
     ...data,
     updatedAt: serverTimestamp()
+  })
+}
+
+// ─── Members & Invites (Phase 2) ───────────────────────────────────────────
+
+/**
+ * Generates a new unique alphanumeric invite code for a shop.
+ */
+export async function generateInviteCode(
+  shopId: string,
+  createdBy: string,
+  maxUses: number = 1
+): Promise<string> {
+  const code = Math.random().toString(36).substring(2, 10).toUpperCase()
+  const ref = doc(db, 'inviteCodes', code)
+
+  await setDoc(ref, {
+    code,
+    shopId,
+    createdBy,
+    role: 'member',
+    useCount: 0,
+    maxUseCount: maxUses,
+    expiresAt: null,
+    usedBy: [],
+    createdAt: serverTimestamp()
+  })
+
+  return code
+}
+
+/**
+ * Validates an invite code. Returns the invite details if valid.
+ */
+export async function validateInviteCode(code: string): Promise<InviteCode | null> {
+  const ref = doc(db, 'inviteCodes', code.trim().toUpperCase())
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return null
+
+  const invite = snap.data() as InviteCode
+  if (invite.expiresAt && invite.expiresAt.toDate() < new Date()) return null
+  if (invite.useCount >= invite.maxUseCount) return null
+
+  return invite
+}
+
+/**
+ * Consumes an invite code for a user.
+ * Assigns storeRole: 'member' and shopId to the user's profile.
+ */
+export async function consumeInviteCode(uid: string, code: string): Promise<void> {
+  const codeRef = doc(db, 'inviteCodes', code.trim().toUpperCase())
+  const userRef = doc(db, 'users', uid)
+
+  await runTransaction(db, async (tx) => {
+    const codeSnap = await tx.get(codeRef)
+    if (!codeSnap.exists()) throw new Error('Invite code not found.')
+
+    const invite = codeSnap.data() as InviteCode
+    if (invite.useCount >= invite.maxUseCount)
+      throw new Error('Invite code has expired or reached its limit.')
+
+    // Update invite code doc
+    tx.update(codeRef, {
+      useCount: invite.useCount + 1,
+      usedBy: [...invite.usedBy, uid]
+    })
+
+    // Update user profile doc
+    tx.update(userRef, {
+      storeRole: 'member' as StoreRole,
+      shopId: invite.shopId,
+      shopOwnerUid: invite.createdBy
+    })
+  })
+}
+
+/**
+ * Fetches all members of a shop by shopId.
+ */
+export async function fetchShopMembers(shopId: string): Promise<UserProfile[]> {
+  const q = query(collection(db, 'users'), where('shopId', '==', shopId))
+  const snap = await getDocs(q)
+  return snap.docs.map((doc) => doc.data() as UserProfile)
+}
+
+/**
+ * Fetches all active invite codes for a shop.
+ */
+export async function fetchInviteCodes(shopId: string): Promise<InviteCode[]> {
+  const q = query(collection(db, 'inviteCodes'), where('shopId', '==', shopId))
+  const snap = await getDocs(q)
+  return snap.docs.map((doc) => doc.data() as InviteCode)
+}
+
+/**
+ * Revokes an invite code (deletes it).
+ */
+export async function revokeInviteCode(code: string): Promise<void> {
+  await deleteDoc(doc(db, 'inviteCodes', code))
+}
+
+/**
+ * Updates a member's role (owner <-> member).
+ */
+export async function updateMemberRole(uid: string, newRole: StoreRole): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), { storeRole: newRole })
+}
+
+/**
+ * Removes a member from the shop by clearing their shopId and role.
+ */
+export async function removeMember(uid: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), {
+    storeRole: null,
+    shopId: null,
+    shopOwnerUid: null
   })
 }

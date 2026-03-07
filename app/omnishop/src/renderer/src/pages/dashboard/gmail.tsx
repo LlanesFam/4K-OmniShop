@@ -1,5 +1,6 @@
 import React from 'react'
 import { Mail } from 'lucide-react'
+import { useAuthStore } from '@/store/useAuthStore'
 
 /**
  * Gmail page — embedded Gmail webview.
@@ -8,13 +9,16 @@ import { Mail } from 'lucide-react'
  * (`persist:gmail`) to keep the user logged in across app restarts.
  * nodeIntegration and contextIsolation are enforced at the main-process level.
  *
+ *
  * @see src/main/index.ts for webview security policy setup.
  */
 export default function GmailPage(): React.JSX.Element {
+  const { user } = useAuthStore()
+
   return (
-    <div className="w-full flex flex-col min-h-full gap-0">
+    <div className="w-full h-full flex flex-col gap-0">
       {/* Page header */}
-      <div className="mb-4">
+      <div className="mb-4 shrink-0">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Mail className="size-6" />
           Gmail
@@ -25,25 +29,13 @@ export default function GmailPage(): React.JSX.Element {
       </div>
 
       {/* Webview container — fills remaining height */}
-      <div className="flex-1 rounded-xl border overflow-hidden bg-muted min-h-0">
-        {/* TODO: Replace this placeholder with the actual <webview> once confirmed.
-            Example:
-              <webview
-                src="https://mail.google.com"
-                partition="persist:gmail"
-                className="w-full h-full"
-                allowpopups
-              />
-        */}
-        <div className="flex h-full items-center justify-center flex-col gap-3 text-center p-8">
-          <Mail className="size-12 text-muted-foreground/40" />
-          <p className="font-medium text-sm">Gmail webview</p>
-          <p className="text-xs text-muted-foreground max-w-sm">
-            The embedded Gmail view will load here once the Electron webview tag is configured in
-            the main process. Ensure <code className="font-mono">webviewTag: true</code> is set in
-            your BrowserWindow preferences.
-          </p>
-        </div>
+      <div className="flex-1 relative rounded-xl border overflow-hidden min-h-0">
+        <webview
+          src="https://mail.google.com"
+          partition={user ? `persist:${user.uid}-gmail` : 'persist:guest-gmail'}
+          className="absolute inset-0 w-full h-full"
+          allowpopups="true"
+        />
       </div>
     </div>
   )

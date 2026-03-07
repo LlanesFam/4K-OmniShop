@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Monitor,
   Moon,
@@ -6,34 +6,25 @@ import {
   Sun,
   Maximize2,
   AppWindow,
-  Store,
-  Save,
   Loader2,
   User,
   Palette,
   MonitorSmartphone,
   Bell,
-  Camera
+  Camera,
+  ShieldAlert,
+  Cpu
 } from 'lucide-react'
 import { updateProfile } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { useAuthStore } from '@/store/useAuthStore'
-import { useShopStore } from '@/store/useShopStore'
 import { type Theme, type ColorTheme, useThemeStore } from '@/store/useThemeStore'
 import { type DisplayMode, type Resolution, useDisplayStore } from '@/store/useDisplayStore'
-import {
-  createShopProfile,
-  updateShopProfile,
-  SHOP_CATEGORIES,
-  CATEGORY_TAXONOMY,
-  type ShopCategory
-} from '@/lib/shopService'
 import { uploadImage } from '@/lib/cloudinaryService'
-import { ImageUpload } from '@/components/ui/image-upload'
 import { ImageCropModal } from '@/components/ui/image-crop-modal'
-import { Input } from '@/components/ui/input'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 // ─── Theme Toggle ─────────────────────────────────────────────────────────────
 
@@ -120,25 +111,154 @@ const RESOLUTION_OPTIONS: { value: Resolution; label: string; sub: string }[] = 
 
 function DisplayModeToggle(): React.JSX.Element {
   const { mode, setMode } = useDisplayStore()
+  // Confirmation state for the fullscreen switch (auto-reverts if not confirmed)
+  const [confirming, setConfirming] = useState(false)
+  const [countdown, setCountdown] = useState(10)
+  const [displays, setDisplays] = useState<Electron.Display[]>([])
+  const [currentDisplayId, setCurrentDisplayId] = useState<number | undefined>(undefined)
+
+  const prevModeRef = useRef<DisplayMode>(mode)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    // Load displays on mount
+    window.api.getDisplays().then((all) => {
+      setDisplays(all)
+      // Heuristic: assume window is on primary or first display initially if unknown
+      // Ideally main process tells us which display we are on, but for now we let user pick.
+    })
+  }, [])
+
+  const stopTick = useCallback(() => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current)
+      tickRef.current = null
+    }
+  }, [])
+
+  const revertFullscreen = useCallback(() => {
+    stopTick()
+    setConfirming(false)
+    setCountdown(10)
+    setMode(prevModeRef.current)
+  }, [stopTick, setMode])
+
+  const confirmFullscreen = useCallback(() => {
+    stopTick()
+    setConfirming(false)
+    setCountdown(10)
+    // Mode is already applied — nothing else to do.
+  }, [stopTick])
+
+  const handleModeClick = useCallback(
+    (value: DisplayMode) => {
+      if (value === 'fullscreen' && mode !== 'fullscreen') {
+        prevModeRef.current = mode
+        setMode('fullscreen')
+        setConfirming(true)
+        setCountdown(10)
+        tickRef.current = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev <= 1) {
+              // Auto-revert when countdown hits 0
+              stopTick()
+              setConfirming(false)
+              setMode(prevModeRef.current)
+              return 10
+            }
+            return prev - 1
+          })
+        }, 1000)
+      } else {
+        setMode(value)
+      }
+    },
+    [mode, setMode, stopTick]
+  )
+
+  const handleDisplaySelect = (displayId: number): void => {
+    setCurrentDisplayId(displayId)
+    window.api.setWindowDisplay(displayId)
+    // If not already fullscreen, switch to it? Or just let user decide.
+    // Usually people pick a screen for fullscreen.
+    if (mode !== 'fullscreen') {
+      handleModeClick('fullscreen')
+    }
+  }
+
+  // Clean up interval on unmount
+  useEffect(() => () => stopTick(), [stopTick])
 
   return (
-    <div className="flex overflow-hidden rounded-md border">
-      {DISPLAY_MODE_OPTIONS.map(({ value, icon: Icon, label }) => (
-        <button
-          key={value}
-          onClick={() => setMode(value)}
-          title={label}
-          className={cn(
-            'flex items-center gap-1.5 border-r px-3 py-1.5 text-xs font-medium transition-colors last:border-r-0',
-            mode === value
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-transparent text-muted-foreground hover:bg-muted'
-          )}
-        >
-          <Icon className="size-3.5" />
-          <span>{label}</span>
-        </button>
-      ))}
+    <div className="space-y-4">
+      <div className="flex overflow-hidden rounded-md border">
+        {DISPLAY_MODE_OPTIONS.map(({ value, icon: Icon, label }) => (
+          <button
+            key={value}
+            onClick={() => handleModeClick(value)}
+            title={label}
+            className={cn(
+              'flex items-center gap-1.5 border-r px-3 py-1.5 text-xs font-medium transition-colors last:border-r-0',
+              mode === value
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-transparent text-muted-foreground hover:bg-muted'
+            )}
+          >
+            <Icon className="size-3.5" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {mode === 'fullscreen' && displays.length > 1 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Select Display</span>
+          <div className="flex flex-wrap gap-2">
+            {displays.map((display, index) => (
+              <button
+                key={display.id}
+                onClick={() => handleDisplaySelect(display.id)}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-1 rounded-md border px-4 py-2 text-xs transition-colors',
+                  currentDisplayId === display.id
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'hover:bg-muted'
+                )}
+              >
+                <Monitor className="size-4" />
+                <span>Display {index + 1}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {display.bounds.width}x{display.bounds.height}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Fullscreen confirmation overlay ────────────────────────────── */}
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center pb-10 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-xl border bg-card shadow-xl px-5 py-3.5 text-sm">
+            <span className="font-medium">Keep Full Screen?</span>
+            <span className="text-muted-foreground text-xs">
+              Reverting in <span className="font-semibold tabular-nums">{countdown}s</span>
+            </span>
+            <button
+              onClick={confirmFullscreen}
+              className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Keep
+            </button>
+            <button
+              onClick={revertFullscreen}
+              className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted transition-colors"
+            >
+              Revert
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -200,308 +320,6 @@ function SettingRow({
   )
 }
 
-// ─── Store Tab ────────────────────────────────────────────────────────────────
-
-function StoreTab(): React.JSX.Element {
-  const { user, profile } = useAuthStore()
-  const { shop } = useShopStore()
-  const isAdmin = profile?.role === 'admin'
-
-  const [categories, setCategories] = useState<ShopCategory[]>(shop?.categories ?? [])
-  const [subCategories, setSubCategories] = useState<string[]>(shop?.subCategories ?? [])
-  const [logoUrl, setLogoUrl] = useState(shop?.logoUrl ?? '')
-  const [bannerUrl, setBannerUrl] = useState(shop?.bannerUrl ?? '')
-  // Admins who haven't set up a shop yet default to the "OmniShop" name.
-  const [shopName, setShopName] = useState(shop?.shopName ?? (isAdmin ? 'OmniShop' : ''))
-  const [description, setDescription] = useState(shop?.description ?? '')
-  const [phone, setPhone] = useState(shop?.phone ?? '')
-  const [address, setAddress] = useState(shop?.address ?? '')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  // Pre-fill once — fires as soon as shop data arrives from Firestore,
-  // whether the component mounted before or after the subscription resolved.
-  // The ref prevents overwriting in-progress user edits on subsequent renders.
-  const initialized = useRef(false)
-  useEffect(() => {
-    if (initialized.current) return
-    if (!shop) {
-      // No shop yet. For admin, defaults are already set via useState initial
-      // values ("OmniShop"). Mark initialized so this effect doesn't keep
-      // running if Firestore confirms the shop truly doesn't exist.
-      if (isAdmin) initialized.current = true
-      return
-    }
-    initialized.current = true
-    setCategories(shop.categories ?? [])
-    setSubCategories(shop.subCategories ?? [])
-    setLogoUrl(shop.logoUrl ?? '')
-    setBannerUrl(shop.bannerUrl ?? '')
-    setShopName(shop.shopName ?? '')
-    setDescription(shop.description ?? '')
-    setPhone(shop.phone ?? '')
-    setAddress(shop.address ?? '')
-  }, [shop, isAdmin])
-
-  const handleSave = async (): Promise<void> => {
-    if (!user) return
-    setSaving(true)
-    setSaved(false)
-    try {
-      const data = {
-        categories,
-        subCategories,
-        logoUrl: logoUrl || undefined,
-        bannerUrl: bannerUrl || undefined,
-        shopName,
-        description,
-        phone,
-        address
-      }
-      if (!shop) {
-        // No Firestore document exists yet (first-time admin shop setup).
-        // updateDoc would throw on a non-existent document, so we use
-        // createShopProfile (setDoc) to initialise it instead.
-        await createShopProfile(user.uid, data)
-      } else {
-        await updateShopProfile(user.uid, data)
-      }
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
-      {/* Admin first-time setup hint */}
-      {isAdmin && !shop && (
-        <div className="flex items-start gap-3 border-b bg-primary/5 px-6 py-4">
-          <Store className="mt-0.5 size-4 shrink-0 text-primary" />
-          <div>
-            <p className="text-sm font-semibold text-foreground">Set up your OmniShop</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              As admin your shop is called{' '}
-              <span className="font-medium text-foreground">OmniShop</span>. Fill in the details
-              below and click <span className="font-medium text-foreground">Save changes</span> to
-              initialise it.
-            </p>
-          </div>
-        </div>
-      )}
-      <div className="divide-y">
-        {/* Categories */}
-        <div className="px-6 py-4 flex flex-col gap-3">
-          <div>
-            <p className="text-sm font-medium">Shop Categories</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Select all categories that describe what your shop sells.
-            </p>
-          </div>
-
-          {/* Category chips — selected float to the top */}
-          <div className="flex flex-wrap gap-2">
-            {[...SHOP_CATEGORIES]
-              .sort((a, b) => {
-                const aS = categories.includes(a.value)
-                const bS = categories.includes(b.value)
-                if (aS && !bS) return -1
-                if (!aS && bS) return 1
-                return 0
-              })
-              .map(({ value, label, emoji }) => {
-                const selected = categories.includes(value)
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => {
-                      setCategories((prev) =>
-                        selected ? prev.filter((c) => c !== value) : [...prev, value]
-                      )
-                      // Remove subs belonging to this category when deselecting
-                      if (selected) {
-                        const removedSubs = CATEGORY_TAXONOMY[value].subs
-                        setSubCategories((prev) => prev.filter((s) => !removedSubs.includes(s)))
-                      }
-                    }}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                      selected
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/50'
-                    )}
-                  >
-                    <span>{emoji}</span>
-                    <span>{label}</span>
-                  </button>
-                )
-              })}
-          </div>
-
-          {/* Subcategories — shown per selected parent */}
-          {categories.length > 0 && (
-            <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Subcategories
-              </p>
-              {categories.map((cat) => {
-                const { label, emoji, subs } = CATEGORY_TAXONOMY[cat]
-                if (subs.length === 0) return null
-                return (
-                  <div key={cat} className="flex flex-col gap-1.5">
-                    <p className="text-xs font-medium text-foreground">
-                      {emoji} {label}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {subs.map((sub) => {
-                        const subSelected = subCategories.includes(sub)
-                        return (
-                          <button
-                            key={sub}
-                            type="button"
-                            onClick={() =>
-                              setSubCategories((prev) =>
-                                subSelected ? prev.filter((s) => s !== sub) : [...prev, sub]
-                              )
-                            }
-                            className={cn(
-                              'rounded-full border px-2.5 py-0.5 text-[11px] transition-colors',
-                              subSelected
-                                ? 'border-primary/60 bg-primary/10 text-primary'
-                                : 'border-border/60 text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
-                            )}
-                          >
-                            {sub}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Banner */}
-        <div className="px-6 py-4 flex flex-col gap-2">
-          <div>
-            <p className="text-sm font-medium">Shop Banner</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              A wide hero image displayed at the top of your storefront. Recommended: 1200×300 px.
-            </p>
-          </div>
-          <ImageUpload
-            value={bannerUrl}
-            onUpload={setBannerUrl}
-            folder="banners"
-            aspectRatio="banner"
-            label="Drag & drop or click to upload a banner"
-            className="mt-1"
-            cropEnabled
-          />
-        </div>
-
-        {/* Logo */}
-        <div className="flex items-start justify-between gap-4 px-6 py-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Shop Logo</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Square image shown in the sidebar, receipts, and invoices.
-            </p>
-          </div>
-          <ImageUpload
-            value={logoUrl}
-            onUpload={setLogoUrl}
-            folder="logos"
-            aspectRatio="square"
-            label="Upload logo"
-            className="w-28 shrink-0"
-            cropEnabled
-          />
-        </div>
-
-        <SettingRow
-          label="Shop Name"
-          description="The public name of your business."
-          control={
-            <Input
-              value={shopName}
-              onChange={(e) => setShopName(e.target.value)}
-              placeholder="e.g. Zen Garden Gifts"
-              className="w-52 text-sm"
-            />
-          }
-        />
-
-        <SettingRow
-          label="Description"
-          description="A short summary of what your shop sells (shown on receipts)."
-          align="start"
-          control={
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Describe your shop…"
-              className="w-52 shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-            />
-          }
-        />
-
-        <SettingRow
-          label="Phone"
-          description="Contact number displayed on invoices and receipts."
-          control={
-            <Input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+63 900 000 0000"
-              className="w-52 text-sm"
-            />
-          }
-        />
-
-        <SettingRow
-          label="Address"
-          description="Your physical store or business address."
-          control={
-            <Input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="123 Main St, City"
-              className="w-52 text-sm"
-            />
-          }
-        />
-
-        {/* Save row */}
-        <div className="flex items-center justify-between gap-4 px-6 py-4 bg-muted/20">
-          {saved ? (
-            <p className="text-xs text-emerald-600 font-medium">✓ Store settings saved.</p>
-          ) : (
-            <span />
-          )}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void handleSave()}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold transition-colors',
-              'bg-primary text-primary-foreground hover:bg-primary/90',
-              'disabled:cursor-not-allowed disabled:opacity-60'
-            )}
-          >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 // ─── Account Tab ─────────────────────────────────────────────────────────────
 
 function AccountTab(): React.JSX.Element {
@@ -680,17 +498,22 @@ function AccountTab(): React.JSX.Element {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-const TABS = [
-  { value: 'store', label: 'Store', icon: Store },
-  { value: 'account', label: 'Account', icon: User },
-  { value: 'appearance', label: 'Appearance', icon: Palette },
-  { value: 'display', label: 'Display', icon: MonitorSmartphone },
-  { value: 'notifications', label: 'Notifications', icon: Bell }
-]
+const SECTIONS = [
+  { id: 'account', label: 'Account', icon: User },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'display', label: 'Display', icon: MonitorSmartphone },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'system', label: 'System', icon: Cpu },
+  { id: 'danger', label: 'Danger Zone', icon: ShieldAlert }
+] as const
+
+type SectionId = (typeof SECTIONS)[number]['id']
 
 export default function SettingsPage(): React.JSX.Element {
+  const [activeSection, setActiveSection] = useState<SectionId>('account')
+
   return (
-    <div className="w-full flex flex-col gap-6 max-w-2xl">
+    <div className="w-full flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Settings className="size-6" />
@@ -701,76 +524,142 @@ export default function SettingsPage(): React.JSX.Element {
         </p>
       </div>
 
-      <Tabs defaultValue="store">
-        <TabsList className="w-full h-auto flex-wrap gap-1 p-1">
-          {TABS.map(({ value, label, icon: Icon }) => (
-            <TabsTrigger key={value} value={value} className="flex items-center gap-1.5 flex-1">
-              <Icon className="size-3.5" />
+      <div className="flex flex-col md:flex-row gap-8 items-start">
+        {/* Left Sidebar Nav */}
+        <nav className="flex flex-row md:flex-col gap-1 w-full md:w-[220px] shrink-0 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
+          {SECTIONS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveSection(id)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap',
+                activeSection === id
+                  ? 'bg-accent text-accent-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
+              )}
+            >
+              <Icon className="size-4" />
               {label}
-            </TabsTrigger>
+            </button>
           ))}
-        </TabsList>
+        </nav>
 
-        <TabsContent value="store" className="mt-4">
-          <StoreTab />
-        </TabsContent>
+        {/* Right Panel Content */}
+        <div className="flex-1 w-full max-w-2xl">
+          {activeSection === 'account' && <AccountTab />}
 
-        <TabsContent value="account" className="mt-4">
-          <AccountTab />
-        </TabsContent>
-
-        <TabsContent value="appearance" className="mt-4">
-          <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
-            <div className="divide-y">
-              <SettingRow
-                label="Theme Mode"
-                description="Switch between Light, Dark, or your System default."
-                control={<ThemeToggle />}
-              />
-              <SettingRow
-                label="Color Theme"
-                description="Choose a primary color personality for the app."
-                align="start"
-                control={<ColorThemeToggle />}
-              />
+          {activeSection === 'appearance' && (
+            <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="divide-y">
+                <SettingRow
+                  label="Theme Mode"
+                  description="Switch between Light, Dark, or your System default."
+                  control={<ThemeToggle />}
+                />
+                <SettingRow
+                  label="Color Theme"
+                  description="Choose a primary color personality for the app."
+                  align="start"
+                  control={<ColorThemeToggle />}
+                />
+              </div>
             </div>
-          </div>
-        </TabsContent>
+          )}
 
-        <TabsContent value="display" className="mt-4">
-          <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
-            <div className="divide-y">
-              <SettingRow
-                label="Window Mode"
-                description="Set how the app occupies the screen."
-                control={<DisplayModeToggle />}
-              />
-              <SettingRow
-                label="Resolution Preset"
-                description="Pick a fixed resolution (Windowed mode only)."
-                align="start"
-                control={<ResolutionToggle />}
-              />
+          {activeSection === 'display' && (
+            <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="divide-y">
+                <SettingRow
+                  label="Window Mode"
+                  description="Set how the app occupies the screen."
+                  control={<DisplayModeToggle />}
+                />
+                <SettingRow
+                  label="Resolution Preset"
+                  description="Pick a fixed resolution (Windowed mode only)."
+                  align="start"
+                  control={<ResolutionToggle />}
+                />
+              </div>
             </div>
-          </div>
-        </TabsContent>
+          )}
 
-        <TabsContent value="notifications" className="mt-4">
-          <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
-            <div className="divide-y">
-              <SettingRow
-                label="Desktop Notifications"
-                description="Show system notifications for new orders and approvals."
-                control={
-                  <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    Coming soon
-                  </span>
-                }
-              />
+          {activeSection === 'notifications' && (
+            <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="divide-y">
+                <SettingRow
+                  label="Desktop Notifications"
+                  description="Show system notifications for new orders and approvals."
+                  control={
+                    <Badge variant="outline" className="font-medium text-muted-foreground">
+                      Coming soon
+                    </Badge>
+                  }
+                />
+              </div>
             </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+          )}
+
+          {activeSection === 'system' && (
+            <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="divide-y">
+                <SettingRow
+                  label="Auto Start"
+                  description="Launch OmniShop automatically when you turn on your computer."
+                  control={
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                        Coming soon
+                      </Badge>
+                      <div className="size-5 rounded-full border bg-muted" />
+                    </div>
+                  }
+                />
+                <SettingRow
+                  label="Auto Update"
+                  description="Keep OmniShop updated with the latest features and security fixes."
+                  control={
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                        Coming soon
+                      </Badge>
+                      <div className="size-5 rounded-full border bg-muted" />
+                    </div>
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'danger' && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 text-card-foreground shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="p-6">
+                <div className="flex items-center gap-2 text-destructive">
+                  <ShieldAlert className="size-5" />
+                  <h3 className="text-sm font-semibold">Danger Zone</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Irreversible actions. Please proceed with caution.
+                </p>
+
+                <div className="mt-6 flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/20 bg-background/50 p-4">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Delete Account</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Permanently remove your account and all associated data.
+                      </p>
+                    </div>
+                    <Button variant="destructive" size="sm" className="h-8 text-xs font-semibold">
+                      Delete Account
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

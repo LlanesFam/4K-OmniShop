@@ -20,11 +20,16 @@ declare global {
     electron: ElectronAPI
     api: {
       quitApp: () => void
+      // Debug
+      openDevTools: () => Promise<void>
       // Updater
       checkForUpdates: () => Promise<void>
       installUpdate: () => Promise<void>
       onUpdateStatus: (cb: (payload: UpdateStatusPayload) => void) => () => void
       onWhatsNew: (cb: (payload: WhatsNewPayload) => void) => () => void
+      // Display
+      getDisplays: () => Promise<Electron.Display[]>
+      setWindowDisplay: (displayId: number) => void
     }
   }
 }

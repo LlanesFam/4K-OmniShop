@@ -34,73 +34,179 @@ const MIME_TYPES: Record<string, string> = {
 
 let localServer: http.Server | null = null
 
-function startStaticServer(dir: string): Promise<number> {
-  return new Promise((resolve) => {
-    localServer = http.createServer((req, res) => {
-      let urlPath = (req.url ?? '/').split('?')[0]
-      if (urlPath === '/') urlPath = '/index.html'
+// ─── Persistent Port ─────────────────────────────────────────────────────────
+// The renderer is served from http://localhost:<port>. Firebase Auth stores
+// its session token in localStorage keyed to the page origin
+// (scheme + host + port). If the port changes between launches (port 0
+// assigns a random OS port), the stored token becomes invisible and the user
+// is forced to log in again even while offline.
+// Fixing this: persist the port to userData/server-port.json and always try
+// the same port first. Fall back to a small range on collision.
 
-      // Guard against malformed percent-encoding — decodeURIComponent throws on
-      // invalid sequences (e.g. /%E0%A4%A). Fall back to index.html on error.
-      let decodedPath: string
-      try {
-        decodedPath = decodeURIComponent(urlPath)
-      } catch {
-        const fallback = join(dir, 'index.html')
-        const fallbackContentType = MIME_TYPES['.html']
-        fs.readFile(fallback, (err, data) => {
+const DEFAULT_PORT = 34521
+
+function readPersistedPort(): number {
+  try {
+    const file = join(app.getPath('userData'), 'server-port.json')
+    if (fs.existsSync(file)) {
+      const { port } = JSON.parse(fs.readFileSync(file, 'utf-8')) as { port: number }
+      if (typeof port === 'number' && port > 1024 && port < 65535) return port
+    }
+  } catch {
+    // ignore — fall through to default
+  }
+  return DEFAULT_PORT
+}
+
+function writePersistedPort(port: number): void {
+  try {
+    fs.writeFileSync(join(app.getPath('userData'), 'server-port.json'), JSON.stringify({ port }))
+  } catch {
+    // ignore — non-critical
+  }
+}
+
+// ─── Persisted Display Settings ──────────────────────────────────────────────
+// Saves and restores the user's display mode and window size across launches,
+// so the app always starts with the last-chosen resolution/mode.
+
+interface DisplaySettings {
+  mode: 'fullscreen' | 'borderless' | 'windowed'
+  width: number
+  height: number
+}
+
+function readDisplaySettings(): DisplaySettings {
+  try {
+    const file = join(app.getPath('userData'), 'display-settings.json')
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf-8')) as DisplaySettings
+      if (
+        ['fullscreen', 'borderless', 'windowed'].includes(data.mode) &&
+        typeof data.width === 'number' &&
+        typeof data.height === 'number'
+      ) {
+        return data
+      }
+    }
+  } catch {
+    // ignore — fall through to default
+  }
+  return { mode: 'fullscreen', width: 1280, height: 720 }
+}
+
+function writeDisplaySettings(settings: DisplaySettings): void {
+  try {
+    fs.writeFileSync(
+      join(app.getPath('userData'), 'display-settings.json'),
+      JSON.stringify(settings)
+    )
+  } catch {
+    // ignore — non-critical
+  }
+}
+
+function startStaticServer(dir: string): Promise<number> {
+  const candidates = [
+    readPersistedPort(),
+    DEFAULT_PORT,
+    DEFAULT_PORT + 1,
+    DEFAULT_PORT + 2,
+    DEFAULT_PORT + 3
+  ]
+
+  // Try each candidate port in order. On EADDRINUSE move to the next one.
+  // Deduplicate so the same value isn't tried twice (e.g. readPersistedPort
+  // returns DEFAULT_PORT when no file exists).
+  const uniqueCandidates = [...new Set(candidates)]
+
+  function tryPort(index: number): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const port = uniqueCandidates[index]
+
+      // Build the request handler
+      const handler = (req: http.IncomingMessage, res: http.ServerResponse): void => {
+        let urlPath = (req.url ?? '/').split('?')[0]
+        if (urlPath === '/') urlPath = '/index.html'
+
+        let decodedPath: string
+        try {
+          decodedPath = decodeURIComponent(urlPath)
+        } catch {
+          const fallback = join(dir, 'index.html')
+          fs.readFile(fallback, (err, data) => {
+            if (err) {
+              res.writeHead(404, { 'Content-Type': 'text/plain' })
+              res.end('Not found')
+              return
+            }
+            res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] })
+            res.end(data)
+          })
+          return
+        }
+
+        const abs = resolvePath(join(dir, normalize(decodedPath)))
+        const isSafe = abs === dir || abs.startsWith(dir + sep)
+        const target =
+          isSafe && fs.existsSync(abs) && !fs.statSync(abs).isDirectory()
+            ? abs
+            : join(dir, 'index.html')
+
+        const contentType = MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream'
+        fs.readFile(target, (err, data) => {
           if (err) {
             res.writeHead(404, { 'Content-Type': 'text/plain' })
             res.end('Not found')
             return
           }
-          res.writeHead(200, { 'Content-Type': fallbackContentType })
+          res.writeHead(200, { 'Content-Type': contentType })
           res.end(data)
         })
-        return
       }
 
-      // Guard against path traversal attacks (e.g. /../sensitive-file).
-      // Resolve to an absolute path and confirm it stays within the renderer dir.
-      const abs = resolvePath(join(dir, normalize(decodedPath)))
-      const isSafe = abs === dir || abs.startsWith(dir + sep)
+      const realServer = http.createServer(handler)
 
-      // SPA fallback — unknown or unsafe paths serve index.html for client-side routing
-      const target =
-        isSafe && fs.existsSync(abs) && !fs.statSync(abs).isDirectory()
-          ? abs
-          : join(dir, 'index.html')
-
-      const contentType = MIME_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream'
-      fs.readFile(target, (err, data) => {
-        if (err) {
-          res.writeHead(404, { 'Content-Type': 'text/plain' })
-          res.end('Not found')
-          return
+      realServer.once('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE' && index + 1 < uniqueCandidates.length) {
+          tryPort(index + 1)
+            .then(resolve)
+            .catch(reject)
+        } else {
+          reject(err)
         }
-        res.writeHead(200, { 'Content-Type': contentType })
-        res.end(data)
+      })
+
+      realServer.listen(port, '127.0.0.1', () => {
+        const boundPort = (realServer.address() as AddressInfo).port
+        localServer = realServer
+        writePersistedPort(boundPort)
+        resolve(boundPort)
       })
     })
-    localServer.listen(0, '127.0.0.1', () => {
-      resolve((localServer!.address() as AddressInfo).port)
-    })
-  })
+  }
+
+  return tryPort(0)
 }
 
 function createWindow(): void {
+  // Restore the user's last-chosen display mode and window dimensions.
+  // Falls back to `{ mode: 'fullscreen', width: 1280, height: 720 }` on first run.
+  const savedDisplay = readDisplaySettings()
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 720,
+    width: savedDisplay.width,
+    height: savedDisplay.height,
     show: false,
     autoHideMenuBar: true,
-    fullscreen: true,
+    fullscreen: savedDisplay.mode === 'fullscreen',
     // resizable is forced to false across all display modes (fixed resolution); managed via IPC
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webviewTag: true
     }
   })
 
@@ -202,8 +308,8 @@ app.whenReady().then(() => {
       "script-src 'self' 'unsafe-eval' https://apis.google.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com https://omnishop.quadkore.app",
-      "frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://omnishop.quadkore.app",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com https://omnishop.quadkore.app https://www.gstatic.com https://www.gstatic.com/generate_204 https://*.api.sanity.io https://cdn.sanity.io https://whst2a2j.apicdn.sanity.io",
+      "frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://omnishop.quadkore.app https://mail.google.com https://www.messenger.com",
       "worker-src 'self' blob:"
     ].join('; ')
 
@@ -242,13 +348,56 @@ app.whenReady().then(() => {
     app.quit()
   })
 
+  // Debug — open native DevTools for the main window
+  ipcMain.handle('debug:open-devtools', () => {
+    BrowserWindow.getAllWindows()[0]?.webContents.openDevTools()
+  })
+
+  // Get available displays
+  ipcMain.handle('get-displays', () => {
+    return screen.getAllDisplays()
+  })
+
+  // Set window to specific display and mode
+  ipcMain.on('set-window-display', (_, displayId: number) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    const display = screen.getAllDisplays().find((d) => d.id === displayId)
+
+    if (win && display) {
+      const { x, y } = display.bounds
+      win.setPosition(x, y)
+      // When moving between displays, ensure we're fullscreen on the target
+      win.setFullScreen(true)
+    }
+  })
+
   ipcMain.on('update-display', (_, config: { mode: string; width?: number; height?: number }) => {
     const win = BrowserWindow.getAllWindows()[0]
     if (!win) return
 
+    // Persist the user's choice so it survives app restarts.
+    writeDisplaySettings({
+      mode: config.mode as 'fullscreen' | 'borderless' | 'windowed',
+      width: config.width ?? 1280,
+      height: config.height ?? 720
+    })
+
     if (config.mode === 'fullscreen') {
-      win.setFullScreen(true)
-      win.setResizable(false)
+      // Bug fix: switching from a windowed resolution (e.g. 720p) back to
+      // fullscreen would retain the small window bounds in "fullscreen" mode
+      // and not actually fill the display.
+      // Fix: explicitly reset the window bounds to the full display area first,
+      // then engage fullscreen after a short delay to let the resize settle.
+      const primaryDisplay = screen.getPrimaryDisplay()
+      const { x, y, width, height } = primaryDisplay.bounds
+      win.setResizable(true)
+      if (win.isFullScreen()) win.setFullScreen(false)
+      if (win.isMaximized()) win.unmaximize()
+      win.setBounds({ x, y, width, height })
+      setTimeout(() => {
+        win.setFullScreen(true)
+        win.setResizable(false)
+      }, 80)
     } else if (config.mode === 'borderless') {
       win.setFullScreen(false)
       const primaryDisplay = screen.getPrimaryDisplay()

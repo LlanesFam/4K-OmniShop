@@ -31,6 +31,13 @@ export default function PendingApprovalPage(): React.JSX.Element {
     }
   }, [user, navigate])
 
+  // Guard: redirect users who haven't completed onboarding yet
+  useEffect(() => {
+    if (profile?.status === 'onboarding') {
+      navigate('/onboarding', { replace: true })
+    }
+  }, [profile?.status, navigate])
+
   // Keep local profile in sync with store (initial load)
   useEffect(() => {
     setLocalProfile(profile)

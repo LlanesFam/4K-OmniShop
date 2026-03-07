@@ -4,6 +4,8 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { useShopStore } from '@/store/useShopStore'
 import { useCategoryStore } from '@/store/useCategoryStore'
 import { useProductStore } from '@/store/useProductStore'
+import { useMaterialStore } from '@/store/useMaterialStore'
+import { useBudgetStore } from '@/store/useBudgetStore'
 import { AppSidebar } from '@/components/app-sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
@@ -35,19 +37,27 @@ export default function DashboardLayout(): React.JSX.Element | null {
 
   const categoryStore = useCategoryStore()
   const productStore = useProductStore()
+  const materialStore = useMaterialStore()
+  const budgetStore = useBudgetStore()
 
   // Start shop + catalog subscriptions once we know the user is approved
   useEffect(() => {
     if (!user || !profile || profile.status !== 'approved') return
-    subscribeShop(user.uid)
-    categoryStore.subscribe(user.uid)
-    productStore.subscribe(user.uid)
+    const shopOwnerId = profile.shopOwnerUid ?? user.uid
+
+    subscribeShop(shopOwnerId)
+    categoryStore.subscribe(shopOwnerId)
+    productStore.subscribe(shopOwnerId)
+    materialStore.subscribe(shopOwnerId)
+    budgetStore.subscribe(shopOwnerId)
     return () => {
       clearShop()
       categoryStore.unsubscribe()
       productStore.unsubscribe()
+      materialStore.unsubscribe()
+      budgetStore.unsubscribe()
     }
-  }, [user?.uid, profile?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.uid, profile?.status, profile?.shopOwnerUid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Wait for both loading states to settle
@@ -66,7 +76,12 @@ export default function DashboardLayout(): React.JSX.Element | null {
       return
     }
 
-    if (!profile || profile.status !== 'approved') {
+    if (!profile || profile.status === 'onboarding') {
+      navigate('/onboarding', { replace: true })
+      return
+    }
+
+    if (profile.status !== 'approved') {
       navigate('/pending-approval', { replace: true })
       return
     }

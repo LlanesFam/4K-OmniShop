@@ -51,3 +51,84 @@ export interface Product {
   createdAt: Timestamp
   updatedAt: Timestamp
 }
+
+// ─── Storage — Materials ──────────────────────────────────────────────────────
+
+export type MaterialStatus = 'active' | 'inactive'
+
+export interface Material {
+  id: string
+  shopId: string
+  name: string
+  description: string
+  /** Unit of measure — e.g. "kg", "bottle", "roll", "pcs" */
+  unit: string
+  /** Low-stock alert threshold */
+  minQuantity: number
+  costPerUnit: number
+  status: MaterialStatus
+  /** Product IDs this material is consumed by */
+  linkedProductIds: string[]
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type VariantLabel = 'new' | 'used' | 'partial'
+
+export interface MaterialVariant {
+  id: string
+  shopId: string
+  materialId: string
+  label: VariantLabel
+  /** Flexible attributes — colour, brand, spec, etc. */
+  attributes: Record<string, string>
+  quantity: number
+  notes: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type MaterialLogType = 'restock' | 'adjustment' | 'inventory-check'
+
+export interface MaterialLog {
+  id: string
+  shopId: string
+  materialId: string
+  variantId: string | null
+  type: MaterialLogType
+  /** Positive = added, negative = removed */
+  delta: number
+  notes: string
+  createdAt: Timestamp
+}
+
+// ─── Budget ───────────────────────────────────────────────────────────────────
+
+export type BudgetEntryType = 'income' | 'expense'
+export type BudgetCategory =
+  | 'sale'
+  | 'bill'
+  | 'supply'
+  | 'salary'
+  | 'maintenance'
+  | 'subscription'
+  | 'other'
+export type RecurrenceFrequency = 'weekly' | 'monthly' | 'annual'
+export type BudgetEntryStatus = 'paid' | 'pending' | 'overdue'
+
+export interface BudgetEntry {
+  id: string
+  shopId: string
+  type: BudgetEntryType
+  category: BudgetCategory
+  description: string
+  amount: number
+  /** ISO date string — e.g. "2026-03-03" */
+  date: string
+  isRecurring: boolean
+  recurrenceFrequency: RecurrenceFrequency | null
+  status: BudgetEntryStatus
+  notes: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}

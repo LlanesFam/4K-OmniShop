@@ -57,7 +57,7 @@ export default function VerifyEmailPage(): React.JSX.Element {
     try {
       const verified = await refreshUser()
       if (verified) {
-        navigate('/pending-approval', { replace: true })
+        navigate('/onboarding', { replace: true })
       } else {
         setCheckError(
           "We couldn't confirm your verification yet. Please click the link in the email and try again."

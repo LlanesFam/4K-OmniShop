@@ -14,7 +14,9 @@ import {
   Table2,
   Eye,
   Pencil,
-  Wrench
+  Wrench,
+  Maximize2,
+  Minimize2
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -22,6 +24,7 @@ import { z } from 'zod'
 
 import { useProductStore } from '@/store/useProductStore'
 import { useCategoryStore } from '@/store/useCategoryStore'
+import { useUIStore } from '@/store/useUIStore'
 import { ProductCard } from '@/components/product-card'
 import { ProductDetailModal } from '@/components/product-detail-modal'
 import { CSVImportDialog } from '@/components/csv-import-dialog'
@@ -70,7 +73,7 @@ import type { Product } from '@/lib/types'
 
 // ─── View Mode ────────────────────────────────────────────────────────────────
 
-type ViewMode = 'default' | 'compact' | 'table'
+// ProductsViewMode is imported from useUIStore ('default' | 'compact' | 'table')
 
 const STATUS_TABLE_STYLES: Record<'active' | 'inactive' | 'draft', string> = {
   active: 'bg-green-500/15 text-green-400 border-green-500/20',
@@ -109,6 +112,33 @@ function ProductSheet({ open, onClose, editing }: ProductSheetProps): React.JSX.
   const { add, update } = useProductStore()
   const { categories } = useCategoryStore()
   const [saving, setSaving] = useState(false)
+  const [isWide, setIsWide] = useState(false)
+
+  // ── Drag-to-scroll ────────────────────────────────────────────────────────
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const isDragging = useRef(false)
+  const dragStartY = useRef(0)
+  const scrollStartTop = useRef(0)
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (
+      (e.target as HTMLElement).closest('input, textarea, button, select, label, [role="combobox"]')
+    )
+      return
+    isDragging.current = true
+    dragStartY.current = e.clientY
+    scrollStartTop.current = scrollRef.current?.scrollTop ?? 0
+    e.preventDefault()
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (!isDragging.current || !scrollRef.current) return
+    scrollRef.current.scrollTop = scrollStartTop.current + (dragStartY.current - e.clientY)
+  }
+
+  const stopDrag = (): void => {
+    isDragging.current = false
+  }
 
   const form = useForm<ProductRawValues, unknown, ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -128,6 +158,11 @@ function ProductSheet({ open, onClose, editing }: ProductSheetProps): React.JSX.
   })
 
   const productType = form.watch('type')
+
+  // Reset expand state when sheet closes
+  React.useEffect(() => {
+    if (!open) setIsWide(false)
+  }, [open])
 
   React.useEffect(() => {
     if (open) {
@@ -185,272 +220,298 @@ function ProductSheet({ open, onClose, editing }: ProductSheetProps): React.JSX.
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-[480px] sm:w-[480px] flex flex-col overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{editing ? 'Edit Product' : 'Add Product'}</SheetTitle>
-          <SheetDescription>
-            {editing
-              ? 'Update the details for this item.'
-              : 'Add a new product or service to your catalog.'}
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent
+        className={cn(
+          'flex flex-col !max-w-none transition-[width] duration-200',
+          isWide ? 'w-[760px]' : 'w-[480px]'
+        )}
+      >
+        {/* ── Header + Expand toggle ── */}
+        <div className="flex items-start justify-between gap-2 pr-8">
+          <SheetHeader className="flex-1">
+            <SheetTitle>{editing ? 'Edit Product' : 'Add Product'}</SheetTitle>
+            <SheetDescription>
+              {editing
+                ? 'Update the details for this item.'
+                : 'Add a new product or service to your catalog.'}
+            </SheetDescription>
+          </SheetHeader>
+          <button
+            type="button"
+            onClick={() => setIsWide((v) => !v)}
+            title={isWide ? 'Collapse panel' : 'Expand panel'}
+            className="mt-0.5 shrink-0 rounded-sm p-1 opacity-60 hover:opacity-100 transition-opacity"
+          >
+            {isWide ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </button>
+        </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5 pt-4">
-            {/* ── Image ── */}
-            <FormField
-              control={form.control}
-              name="imageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Product Image</FormLabel>
-                  <FormControl>
-                    <ImageUpload
-                      value={field.value}
-                      onUpload={(url) => field.onChange(url)}
-                      folder="products"
-                      aspectRatio="product"
-                      cropEnabled
-                      label="Upload product image"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Separator />
-
-            {/* ── Type toggle ── */}
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Type</FormLabel>
-                  <FormControl>
-                    <div className="flex rounded-md border overflow-hidden">
-                      {(['product', 'service'] as const).map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => field.onChange(t)}
-                          className={cn(
-                            'flex-1 py-2 text-sm font-medium transition-colors capitalize',
-                            field.value === t
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-background text-muted-foreground hover:bg-muted'
-                          )}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {/* ── Name ── */}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={
-                        productType === 'service' ? 'e.g. Haircut, Web Design' : 'e.g. Iced Latte'
-                      }
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* ── Description ── */}
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Description <span className="text-muted-foreground text-xs">(optional)</span>
-                  </FormLabel>
-                  <FormControl>
-                    <textarea
-                      rows={3}
-                      placeholder="Briefly describe this item…"
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Separator />
-
-            {/* ── Price ── */}
-            <FormField
-              control={form.control}
-              name="price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Price (₱)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      placeholder="0.00"
-                      {...field}
-                      value={(field.value as number) ?? 0}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* ── SKU + Barcode ── */}
-            <div className="grid grid-cols-2 gap-3">
+        {/* ── Scrollable form body — drag to scroll ── */}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto cursor-grab active:cursor-grabbing"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={stopDrag}
+          onMouseLeave={stopDrag}
+        >
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5 pt-4">
+              {/* ── Image ── */}
               <FormField
                 control={form.control}
-                name="sku"
+                name="imageUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      SKU <span className="text-muted-foreground text-xs">(optional)</span>
-                    </FormLabel>
+                    <FormLabel>Product Image</FormLabel>
                     <FormControl>
-                      <Input placeholder="ABC-001" {...field} />
+                      <ImageUpload
+                        value={field.value}
+                        onUpload={(url) => field.onChange(url)}
+                        folder="products"
+                        aspectRatio="product"
+                        cropEnabled
+                        label="Upload product image"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <Separator />
+
+              {/* ── Type toggle ── */}
               <FormField
                 control={form.control}
-                name="barcode"
+                name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      Barcode <span className="text-muted-foreground text-xs">(optional)</span>
-                    </FormLabel>
+                    <FormLabel>Type</FormLabel>
                     <FormControl>
-                      <Input placeholder="012345678" {...field} />
+                      <div className="flex rounded-md border overflow-hidden">
+                        {(['product', 'service'] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => field.onChange(t)}
+                            className={cn(
+                              'flex-1 py-2 text-sm font-medium transition-colors capitalize',
+                              field.value === t
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-background text-muted-foreground hover:bg-muted'
+                            )}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {/* ── Name ── */}
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={
+                          productType === 'service' ? 'e.g. Haircut, Web Design' : 'e.g. Iced Latte'
+                        }
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
 
-            {/* ── Stock (products only) ── */}
-            {productType === 'product' && (
+              {/* ── Description ── */}
               <FormField
                 control={form.control}
-                name="stock"
+                name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Stock Quantity</FormLabel>
+                    <FormLabel>
+                      Description <span className="text-muted-foreground text-xs">(optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <textarea
+                        rows={3}
+                        placeholder="Briefly describe this item…"
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Separator />
+
+              {/* ── Price ── */}
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Price (₱)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         min={0}
-                        placeholder="Leave empty to not track"
-                        value={(field.value as number | null) ?? ''}
-                        onChange={(e) =>
-                          field.onChange(e.target.value === '' ? null : Number(e.target.value))
-                        }
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        value={(field.value as number) ?? 0}
                       />
                     </FormControl>
-                    <FormDescription className="text-xs">
-                      Leave empty if you don&apos;t track stock for this item.
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
 
-            <Separator />
+              {/* ── SKU + Barcode ── */}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="sku"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        SKU <span className="text-muted-foreground text-xs">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="ABC-001" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="barcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Barcode <span className="text-muted-foreground text-xs">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="012345678" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-            {/* ── Category ── */}
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Category <span className="text-muted-foreground text-xs">(optional)</span>
-                  </FormLabel>
-                  <FormControl>
-                    <select
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      value={field.value ?? ''}
-                      onChange={(e) => field.onChange(e.target.value || null)}
-                    >
-                      <option value="">— Uncategorised —</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              {/* ── Stock (products only) ── */}
+              {productType === 'product' && (
+                <FormField
+                  control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stock Quantity</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Leave empty to not track"
+                          value={(field.value as number | null) ?? ''}
+                          onChange={(e) =>
+                            field.onChange(e.target.value === '' ? null : Number(e.target.value))
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        Leave empty if you don&apos;t track stock for this item.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            />
 
-            {/* ── Status ── */}
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <FormControl>
-                    <select
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      value={field.value}
-                      onChange={(e) => field.onChange(e.target.value)}
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="draft">Draft</option>
-                    </select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <Separator />
 
-            <SheetFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? (
-                  <>
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                    {editing ? 'Saving…' : 'Adding…'}
-                  </>
-                ) : editing ? (
-                  'Save Changes'
-                ) : (
-                  'Add Product'
+              {/* ── Category ── */}
+              <FormField
+                control={form.control}
+                name="categoryId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Category <span className="text-muted-foreground text-xs">(optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <select
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        value={field.value ?? ''}
+                        onChange={(e) => field.onChange(e.target.value || null)}
+                      >
+                        <option value="">— Uncategorised —</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </Button>
-            </SheetFooter>
-          </form>
-        </Form>
+              />
+
+              {/* ── Status ── */}
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <FormControl>
+                      <select
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        value={field.value}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="draft">Draft</option>
+                      </select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <SheetFooter className="pt-4 pb-4">
+                <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? (
+                    <>
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                      {editing ? 'Saving…' : 'Adding…'}
+                    </>
+                  ) : editing ? (
+                    'Save Changes'
+                  ) : (
+                    'Add Product'
+                  )}
+                </Button>
+              </SheetFooter>
+            </form>
+          </Form>
+        </div>
       </SheetContent>
     </Sheet>
   )
@@ -480,7 +541,7 @@ export default function ProductsPage(): React.JSX.Element {
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [showTemplateDialog, setShowTemplateDialog] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('default')
+  const { productsViewMode: viewMode, setProductsViewMode: setViewMode } = useUIStore()
 
   const noCategories = !categoriesLoading && categories.length === 0 && products.length === 0
 
@@ -536,8 +597,16 @@ export default function ProductsPage(): React.JSX.Element {
     const reader = new FileReader()
     reader.onload = (ev): void => {
       const text = ev.target?.result as string
-      const existingNames = new Set(products.map((p) => p.name.toLowerCase()))
-      const result = parseProductsCSV(text, existingNames)
+      // Build composite duplicate keys: name||categoryName
+      // A product is only a duplicate when BOTH name and category match.
+      const catIdToName = new Map(categories.map((c) => [c.id, c.name]))
+      const existingKeys = new Set(
+        products.map((p) => {
+          const catName = catIdToName.get(p.categoryId ?? '') ?? ''
+          return `${p.name.toLowerCase()}||${catName.toLowerCase()}`
+        })
+      )
+      const result = parseProductsCSV(text, existingKeys)
       setCsvImportResult(result)
     }
     reader.readAsText(file)
