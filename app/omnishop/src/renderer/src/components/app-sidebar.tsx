@@ -17,12 +17,14 @@ import {
   Users,
   BarChart3,
   ShieldCheck,
-  Wallet
+  Wallet,
+  Settings2,
+  ChevronsUpDown,
+  Check
 } from 'lucide-react'
 
 import { useAuthStore } from '@/store/useAuthStore'
 import { useShopStore } from '@/store/useShopStore'
-import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import {
   Sidebar,
   SidebarContent,
@@ -34,9 +36,19 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator
+  SidebarSeparator,
+  useSidebar
 } from '@/components/ui/sidebar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -83,7 +95,9 @@ const USER_NAV_GROUPS: NavGroup[] = [
     items: [
       { title: 'Products', url: '/dashboard/products', icon: Package },
       { title: 'Categories', url: '/dashboard/categories', icon: Tag },
-      { title: 'Price List', url: '/dashboard/price-list', icon: ShoppingCart }
+      { title: 'Price List', url: '/dashboard/price-list', icon: ShoppingCart },
+      { title: 'Storage', url: '/dashboard/storage', icon: Archive },
+      { title: 'Store Management', url: '/dashboard/store-management', icon: Settings2 }
     ]
   },
   {
@@ -92,10 +106,6 @@ const USER_NAV_GROUPS: NavGroup[] = [
       { title: 'Transactions', url: '/dashboard/transactions', icon: Receipt },
       { title: 'Reports', url: '/dashboard/reports', icon: BarChart3 }
     ]
-  },
-  {
-    label: 'Storage',
-    items: [{ title: 'Storage', url: '/dashboard/storage', icon: Archive }]
   },
   {
     label: 'Finance',
@@ -140,6 +150,131 @@ function NavItemButton({ item, currentPath }: NavItemButtonProps): React.JSX.Ele
   )
 }
 
+/** Component for switching between stores (or just displaying the current one). */
+function StoreSwitcher({
+  shop,
+  isAdmin,
+  storeRole
+}: {
+  shop: any
+  isAdmin: boolean
+  storeRole?: string
+}): React.JSX.Element {
+  const { isMobile } = useSidebar()
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              className={cn(
+                'relative h-auto overflow-hidden rounded-lg p-0 hover:bg-transparent active:bg-transparent transition-all duration-200',
+                'group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:aspect-square group-data-[collapsible=icon]:size-8'
+              )}
+            >
+              {/* Trigger content - Collapsed state logic via CSS classes */}
+              <div className="flex items-center w-full h-full">
+                {/* ── Expanded State ── */}
+                <div
+                  className="flex w-full items-end gap-2.5 px-3 py-3 pt-10 group-data-[collapsible=icon]:hidden"
+                  style={{
+                    background: shop?.bannerUrl
+                      ? `linear-gradient(to top, hsl(var(--sidebar-background)) 0%, transparent 100%),
+                         linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 40%),
+                         url(${shop.bannerUrl}) top center / 100% auto no-repeat`
+                      : 'linear-gradient(135deg, hsl(var(--sidebar-primary)/0.15), hsl(var(--sidebar-primary)/0.05))'
+                  }}
+                >
+                  {/* Logo/Avatar */}
+                  <Avatar className="size-9 rounded-lg border border-border/60 bg-sidebar-background shadow-sm shrink-0">
+                    <AvatarImage
+                      src={shop?.logoUrl}
+                      alt={shop?.shopName}
+                      className="object-cover"
+                    />
+                    <AvatarFallback className="rounded-lg bg-sidebar-primary font-bold text-sm text-sidebar-primary-foreground">
+                      4K
+                    </AvatarFallback>
+                  </Avatar>
+
+                  {/* Name + Role */}
+                  <div className="flex flex-col gap-0.5 leading-tight min-w-0 flex-1">
+                    <span className="font-semibold truncate text-sm">
+                      {shop?.shopName ?? 'OmniShop'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                      {isAdmin ? (
+                        <>
+                          <ShieldCheck className="size-2.5 text-violet-400" />
+                          Admin Console
+                        </>
+                      ) : (
+                        (storeRole ?? 'Owner')
+                      )}
+                    </span>
+                  </div>
+
+                  <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground/50 mb-0.5" />
+                </div>
+
+                {/* ── Collapsed State ── */}
+                <div className="hidden aspect-square size-8 shrink-0 items-center justify-center rounded-lg overflow-hidden group-data-[collapsible=icon]:flex">
+                  {shop?.logoUrl ? (
+                    <img
+                      src={shop.logoUrl}
+                      alt={shop.shopName}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex size-full items-center justify-center rounded-lg bg-sidebar-primary font-bold text-sm text-sidebar-primary-foreground">
+                      4K
+                    </span>
+                  )}
+                </div>
+              </div>
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            align="start"
+            side={isMobile ? 'bottom' : 'right'}
+            sideOffset={4}
+          >
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Store</DropdownMenuLabel>
+            <DropdownMenuItem className="gap-2 p-2">
+              <div className="flex size-6 items-center justify-center rounded border bg-background">
+                {shop?.logoUrl ? (
+                  <img src={shop.logoUrl} alt="" className="size-full rounded-sm object-cover" />
+                ) : (
+                  <Store className="size-4 shrink-0" />
+                )}
+              </div>
+              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                <span className="text-sm font-medium truncate">{shop?.shopName ?? 'OmniShop'}</span>
+                <span className="text-[10px] text-muted-foreground">Active Store</span>
+              </div>
+              <Check className="size-4 ml-auto text-primary" />
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2 p-2 cursor-default opacity-50">
+              <div className="flex size-6 items-center justify-center rounded border bg-muted">
+                <Store className="size-4" />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">Add another store</span>
+                <span className="text-[10px] text-muted-foreground">Coming soon</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -153,12 +288,24 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
  * @param isAdmin - Controls visibility of the Admin nav group.
  */
 export function AppSidebar({ isAdmin = false, ...props }: AppSidebarProps): React.JSX.Element {
-  const { user, logout } = useAuthStore()
+  const { user, profile, logout } = useAuthStore()
   const { shop } = useShopStore()
   const location = useLocation()
   const currentPath = location.pathname
 
-  const isOnline = useNetworkStatus()
+  const isMember = profile?.storeRole === 'member'
+
+  const filteredGroups = (isAdmin ? ADMIN_NAV_GROUPS : USER_NAV_GROUPS)
+    .map((group) => {
+      if (group.label === 'Sales' && isMember) {
+        return { ...group, items: [] } // Members can't see Sales
+      }
+      if (group.label === 'Finance' && isMember) {
+        return { ...group, items: [] } // Members can't see Finance
+      }
+      return group
+    })
+    .filter((group) => group.items.length > 0)
 
   /** Returns the first two uppercase letters of a display name or email. */
   const getInitials = (nameOrEmail: string | null): string => {
@@ -177,85 +324,12 @@ export function AppSidebar({ isAdmin = false, ...props }: AppSidebarProps): Reac
     <Sidebar collapsible="icon" {...props}>
       {/* ── Header ── */}
       <SidebarHeader className="p-0 mt-2">
-        <SidebarMenu>
-          <SidebarMenuItem className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
-            <SidebarMenuButton
-              size="lg"
-              asChild
-              className="h-auto p-0 hover:bg-transparent active:bg-transparent"
-            >
-              <NavLink to="/dashboard">
-                {/* Expanded: banner bg + logo + name */}
-                <div
-                  className="relative flex w-full items-end gap-2.5 overflow-hidden rounded-lg px-3 pb- pt-10 group-data-[collapsible=icon]:hidden"
-                  style={{
-                    background: shop?.bannerUrl
-                      ? `linear-gradient(to top, hsl(var(--sidebar-background)) 10%, transparent 100%), url(${shop.bannerUrl}) top center / 100% auto no-repeat`
-                      : 'linear-gradient(135deg, hsl(var(--sidebar-primary)/0.15), hsl(var(--sidebar-primary)/0.05))'
-                  }}
-                >
-                  {/* Logo */}
-                  <div className="flex aspect-square size-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-sidebar-background shadow-sm overflow-hidden">
-                    {shop?.logoUrl ? (
-                      <img
-                        src={shop.logoUrl}
-                        alt={shop.shopName}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <span className="flex size-full items-center justify-center bg-sidebar-primary font-bold text-sm text-sidebar-primary-foreground">
-                        4K
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Name + badge */}
-                  <div className="flex flex-col gap-0.5 leading-none min-w-0">
-                    <span className="font-semibold truncate text-sm">
-                      {shop?.shopName ?? 'OmniShop'}
-                    </span>
-                    {isAdmin ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-400">
-                        <ShieldCheck className="size-2.5" />
-                        Admin Console
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <span
-                          className={cn(
-                            'h-1.5 w-1.5 rounded-full',
-                            isOnline ? 'bg-green-500' : 'bg-red-500'
-                          )}
-                        />
-                        {isOnline ? 'Online' : 'Offline'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Collapsed: logo only */}
-                <div className="hidden aspect-square size-8 shrink-0 items-center justify-center rounded-lg overflow-hidden group-data-[collapsible=icon]:flex">
-                  {shop?.logoUrl ? (
-                    <img
-                      src={shop.logoUrl}
-                      alt={shop.shopName}
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex size-full items-center justify-center rounded-lg bg-sidebar-primary font-bold text-sm text-sidebar-primary-foreground">
-                      4K
-                    </span>
-                  )}
-                </div>
-              </NavLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <StoreSwitcher shop={shop} isAdmin={isAdmin} storeRole={profile?.storeRole} />
       </SidebarHeader>
 
       {/* ── Content ── */}
       <SidebarContent>
-        {(isAdmin ? ADMIN_NAV_GROUPS : USER_NAV_GROUPS).map((group, index) => (
+        {filteredGroups.map((group, index) => (
           <React.Fragment key={group.label ?? 'main'}>
             {index > 0 && <SidebarSeparator />}
             <SidebarGroup>

@@ -1,6 +1,6 @@
 {
   "name": "omnishop",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Omnishop is a desktop app built with Electron and Vite.",
   "main": "./out/main/index.js",
   "author": "Mika",
@@ -57,6 +57,7 @@
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/w3c-web-hid": "^1.0.6",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.24",
     "class-variance-authority": "^0.7.1",

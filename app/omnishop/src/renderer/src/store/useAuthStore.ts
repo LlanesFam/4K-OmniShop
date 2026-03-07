@@ -12,13 +12,37 @@ import {
   signInWithPopup,
   reload
 } from 'firebase/auth'
-import { doc, getDoc, runTransaction, serverTimestamp, type Timestamp } from 'firebase/firestore'
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  serverTimestamp,
+  updateDoc,
+  type Timestamp
+} from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'user'
-export type UserStatus = 'pending' | 'approved' | 'rejected'
+export type UserStatus = 'onboarding' | 'pending' | 'approved' | 'rejected'
+export type StoreRole = 'owner' | 'member'
+
+/**
+ * Answers submitted during the onboarding questionnaire (pre-approval).
+ */
+export interface OnboardingAnswers {
+  /** Required: short description of the store. */
+  storeDescription: string
+  /** Optional chip selection: Hardware | Clothing | Food | Electronics | General | Other */
+  storeType?: string
+  /** Optional URL to existing shop (social media, website, etc.) */
+  existingShopLink?: string
+  /** Required chip selection: how the user found out about OmniShop. */
+  referralSource: string
+  /** Optional: city or region of the store. */
+  storeLocation?: string
+}
 
 /**
  * Mirror of the Firestore `users/{uid}` document structure.
@@ -29,8 +53,14 @@ export interface UserProfile {
   email: string
   role: UserRole
   status: UserStatus
+  /** Optional store association for multi-user shops. */
+  storeRole?: StoreRole
+  shopId?: string
+  shopOwnerUid?: string
   /** Set by an admin when the account is rejected. */
   rejectionReason?: string
+  /** Questionnaire answers submitted before the account enters the admin review queue. */
+  onboardingAnswers?: OnboardingAnswers
   createdAt: Timestamp
 }
 
@@ -63,6 +93,11 @@ interface AuthState {
    * Call this when an external change (e.g. admin approval) may have occurred.
    */
   refreshProfile: () => Promise<void>
+  /**
+   * Saves onboarding questionnaire answers to Firestore and transitions
+   * the user's status from `'onboarding'` to `'pending'` (admin review queue).
+   */
+  completeOnboarding: (answers: OnboardingAnswers) => Promise<void>
   resendVerificationEmail: () => Promise<void>
   sendPasswordReset: (email: string) => Promise<void>
   clearError: () => void
@@ -134,7 +169,7 @@ async function createUserProfile(uid: string, displayName: string, email: string
         displayName,
         email: email.toLowerCase().trim(),
         role: 'user' satisfies UserRole,
-        status: 'pending' satisfies UserStatus,
+        status: 'onboarding' satisfies UserStatus,
         createdAt: serverTimestamp()
       })
     }
@@ -293,6 +328,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!user) return
     const profile = await fetchUserProfile(user.uid)
     useAuthStore.setState({ profile })
+  },
+
+  completeOnboarding: async (answers) => {
+    const { user } = get()
+    if (!user) throw new Error('No authenticated user.')
+    await updateDoc(doc(db, 'users', user.uid), {
+      onboardingAnswers: answers,
+      status: 'pending' satisfies UserStatus
+    })
+    await get().refreshProfile()
   },
 
   resendVerificationEmail: async () => {

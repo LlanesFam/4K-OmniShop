@@ -1,5 +1,6 @@
 import React from 'react'
 import { MessageCircle } from 'lucide-react'
+import { useAuthStore } from '@/store/useAuthStore'
 
 /**
  * Messenger page — embedded Facebook Messenger webview.
@@ -11,10 +12,12 @@ import { MessageCircle } from 'lucide-react'
  * @see src/main/index.ts for webview security policy setup.
  */
 export default function MessengerPage(): React.JSX.Element {
+  const { user } = useAuthStore()
+
   return (
-    <div className="w-full flex flex-col min-h-full gap-0">
+    <div className="w-full h-full flex flex-col gap-0">
       {/* Page header */}
-      <div className="mb-4">
+      <div className="mb-4 shrink-0">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <MessageCircle className="size-6" />
           Messenger
@@ -25,27 +28,13 @@ export default function MessengerPage(): React.JSX.Element {
       </div>
 
       {/* Webview container — fills remaining height */}
-      <div className="flex-1 rounded-xl border overflow-hidden bg-muted min-h-0">
-        {/* TODO: Replace this placeholder with the actual <webview> once
-            Electron's webview feature is confirmed enabled in electron.vite.config.ts.
-            Example:
-              <webview
-                ref={webviewRef}
-                src="https://www.messenger.com"
-                partition="persist:messenger"
-                className="w-full h-full"
-                allowpopups
-              />
-        */}
-        <div className="flex h-full items-center justify-center flex-col gap-3 text-center p-8">
-          <MessageCircle className="size-12 text-muted-foreground/40" />
-          <p className="font-medium text-sm">Messenger webview</p>
-          <p className="text-xs text-muted-foreground max-w-sm">
-            The embedded Messenger view will load here once the Electron webview tag is configured
-            in the main process. Ensure <code className="font-mono">webviewTag: true</code> is set
-            in your BrowserWindow preferences.
-          </p>
-        </div>
+      <div className="flex-1 relative rounded-xl border overflow-hidden min-h-0">
+        <webview
+          src="https://www.messenger.com"
+          partition={user ? `persist:${user.uid}-messenger` : 'persist:guest-messenger'}
+          className="absolute inset-0 w-full h-full"
+          allowpopups="true"
+        />
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { Monitor, Moon, PowerOff, Sun } from 'lucide-react'
 
 import { type Theme, useThemeStore } from '@/store/useThemeStore'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -41,6 +42,7 @@ const ROUTE_MAP: Record<string, RouteInfo> = {
   '/dashboard/products': { group: 'Store', title: 'Products' },
   '/dashboard/categories': { group: 'Store', title: 'Categories' },
   '/dashboard/price-list': { group: 'Store', title: 'Price List' },
+  '/dashboard/store-management': { group: 'Store', title: 'Store Management' },
   '/dashboard/transactions': { group: 'Sales', title: 'Transactions' },
   '/dashboard/reports': { group: 'Sales', title: 'Reports' },
   '/dashboard/users': { group: 'Admin', title: 'All Users' },
@@ -122,6 +124,7 @@ function ThemeCycleButton(): React.JSX.Element {
 export function DashboardHeader(): React.JSX.Element {
   const { pathname } = useLocation()
   const { date, time } = useClock()
+  const isOnline = useNetworkStatus()
   const [showQuitConfirm, setShowQuitConfirm] = React.useState(false)
 
   const route = ROUTE_MAP[pathname] ?? { group: null, title: 'Dashboard' }
@@ -161,6 +164,15 @@ export function DashboardHeader(): React.JSX.Element {
           <span>{date}</span>
           <Separator orientation="vertical" className="mx-1 h-3" />
           <span className="tabular-nums">{time}</span>
+          <Separator orientation="vertical" className="mx-1 h-3" />
+          <div className="flex items-center gap-1.5 ml-0.5">
+            <span
+              className={cn('h-1.5 w-1.5 rounded-full', isOnline ? 'bg-green-500' : 'bg-red-500')}
+            />
+            <span className="font-medium text-[10px] uppercase tracking-wider">
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
+          </div>
         </div>
 
         <Separator orientation="vertical" className="hidden h-4 sm:block" />

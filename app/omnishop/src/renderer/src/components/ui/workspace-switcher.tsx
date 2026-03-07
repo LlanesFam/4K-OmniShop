@@ -1,36 +1,36 @@
-"use client";
+'use client'
 
-import { Check, ChevronsUpDown } from "lucide-react";
-import { useState } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Check, ChevronsUpDown } from 'lucide-react'
+import { useState } from 'react'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 
 const workspaces = [
   {
     id: 1,
-    name: "Workspace 1",
-    createdBy: "abc@example.com",
+    name: 'Workspace 1',
+    createdBy: 'abc@example.com'
   },
   {
     id: 2,
-    name: "Workspace 2",
-    createdBy: "def@example.com",
+    name: 'Workspace 2',
+    createdBy: 'def@example.com'
   },
   {
     id: 3,
-    name: "Workspace 3",
-    createdBy: "ghi@example.com",
-  },
-];
+    name: 'Workspace 3',
+    createdBy: 'ghi@example.com'
+  }
+]
 
 export default function WorkspaceSwitcher() {
-  const [selectedWorkspace, setSelectedWorkspace] = useState(workspaces[0]);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(workspaces[0])
 
   return (
     <DropdownMenu>
@@ -53,10 +53,7 @@ export default function WorkspaceSwitcher() {
       <DropdownMenuContent align="start" className="w-52">
         <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
         {workspaces.map((workspace) => (
-          <DropdownMenuItem
-            key={workspace.id}
-            onClick={() => setSelectedWorkspace(workspace)}
-          >
+          <DropdownMenuItem key={workspace.id} onClick={() => setSelectedWorkspace(workspace)}>
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8 rounded-md">
                 <AvatarFallback className="rounded-md bg-primary/10 text-foreground">
@@ -65,17 +62,13 @@ export default function WorkspaceSwitcher() {
               </Avatar>
               <div className="flex flex-col">
                 <span>{workspace.name}</span>
-                <span className="text-muted-foreground text-xs">
-                  {workspace.createdBy}
-                </span>
+                <span className="text-muted-foreground text-xs">{workspace.createdBy}</span>
               </div>
             </div>
-            {selectedWorkspace.id === workspace.id && (
-              <Check className="ml-auto" />
-            )}
+            {selectedWorkspace.id === workspace.id && <Check className="ml-auto" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+  )
 }

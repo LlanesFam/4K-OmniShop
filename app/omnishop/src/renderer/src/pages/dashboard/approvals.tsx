@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { CheckCircle2, UserCheck, XCircle, Clock, Mail, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, FileText, UserCheck, XCircle, Clock, Mail, ShieldAlert } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
-import { useAuthStore, type UserProfile } from '@/store/useAuthStore'
+import { useAuthStore, type UserProfile, type OnboardingAnswers } from '@/store/useAuthStore'
 import { subscribeToPendingUsers, approveUser, rejectUser } from '@/lib/adminService'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,6 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -67,6 +74,7 @@ export default function ApprovalsPage(): React.JSX.Element {
   const [dialog, setDialog] = useState<DialogState>({ type: 'none' })
   const [rejectionReason, setRejectionReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [appDialog, setAppDialog] = useState<UserProfile | null>(null)
 
   useEffect(() => {
     // Only subscribe when the current user is confirmed admin; prevents permission
@@ -211,7 +219,16 @@ export default function ApprovalsPage(): React.JSX.Element {
                   <Clock className="size-3" />
                   Registered {formatDate(u.createdAt)}
                 </p>
-                <div className="flex gap-2 mt-auto">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full gap-1.5 text-muted-foreground hover:text-foreground"
+                  onClick={() => setAppDialog(u)}
+                >
+                  <FileText className="size-3.5" />
+                  View Application
+                </Button>
+                <div className="flex gap-2">
                   <Button
                     size="sm"
                     className="flex-1 gap-1.5"
@@ -321,6 +338,56 @@ export default function ApprovalsPage(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Application Answers Dialog */}
+      <Dialog open={!!appDialog} onOpenChange={(o) => !o && setAppDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="size-4" />
+              Application — {appDialog?.displayName}
+            </DialogTitle>
+            <DialogDescription>
+              Answers submitted during the onboarding questionnaire.
+            </DialogDescription>
+          </DialogHeader>
+
+          {appDialog?.onboardingAnswers ? (
+            <ApplicationAnswers answers={appDialog.onboardingAnswers} />
+          ) : (
+            <p className="text-sm text-muted-foreground py-2">
+              No application data available. This user may have registered before the onboarding
+              questionnaire was introduced.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
+  )
+}
+
+// ─── Application Answers ──────────────────────────────────────────────────────
+
+function ApplicationAnswers({ answers }: { answers: OnboardingAnswers }): React.JSX.Element {
+  const rows: { label: string; value: string | undefined }[] = [
+    { label: "What's their store about?", value: answers.storeDescription },
+    { label: 'Type of store', value: answers.storeType },
+    { label: 'Existing shop link', value: answers.existingShopLink },
+    { label: 'How they found us', value: answers.referralSource },
+    { label: 'Store location', value: answers.storeLocation }
+  ]
+  return (
+    <div className="space-y-3 py-1">
+      {rows.map(({ label, value }) =>
+        value ? (
+          <div key={label} className="space-y-0.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {label}
+            </p>
+            <p className="text-sm text-foreground break-words">{value}</p>
+          </div>
+        ) : null
+      )}
+    </div>
   )
 }

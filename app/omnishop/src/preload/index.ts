@@ -55,7 +55,13 @@ const api = {
     const handler = (_: Electron.IpcRendererEvent, payload: WhatsNewPayload): void => cb(payload)
     ipcRenderer.on('app:whats-new', handler)
     return () => ipcRenderer.removeListener('app:whats-new', handler)
-  }
+  },
+
+  /** Get available displays */
+  getDisplays: (): Promise<Electron.Display[]> => ipcRenderer.invoke('get-displays'),
+
+  /** Move window to display and maximize */
+  setWindowDisplay: (displayId: number): void => ipcRenderer.send('set-window-display', displayId)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

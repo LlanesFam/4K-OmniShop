@@ -43,11 +43,13 @@ export default function DashboardLayout(): React.JSX.Element | null {
   // Start shop + catalog subscriptions once we know the user is approved
   useEffect(() => {
     if (!user || !profile || profile.status !== 'approved') return
-    subscribeShop(user.uid)
-    categoryStore.subscribe(user.uid)
-    productStore.subscribe(user.uid)
-    materialStore.subscribe(user.uid)
-    budgetStore.subscribe(user.uid)
+    const shopOwnerId = profile.shopOwnerUid ?? user.uid
+
+    subscribeShop(shopOwnerId)
+    categoryStore.subscribe(shopOwnerId)
+    productStore.subscribe(shopOwnerId)
+    materialStore.subscribe(shopOwnerId)
+    budgetStore.subscribe(shopOwnerId)
     return () => {
       clearShop()
       categoryStore.unsubscribe()
@@ -55,7 +57,7 @@ export default function DashboardLayout(): React.JSX.Element | null {
       materialStore.unsubscribe()
       budgetStore.unsubscribe()
     }
-  }, [user?.uid, profile?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.uid, profile?.status, profile?.shopOwnerUid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Wait for both loading states to settle
@@ -74,7 +76,12 @@ export default function DashboardLayout(): React.JSX.Element | null {
       return
     }
 
-    if (!profile || profile.status !== 'approved') {
+    if (!profile || profile.status === 'onboarding') {
+      navigate('/onboarding', { replace: true })
+      return
+    }
+
+    if (profile.status !== 'approved') {
       navigate('/pending-approval', { replace: true })
       return
     }

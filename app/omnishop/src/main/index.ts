@@ -205,7 +205,8 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webviewTag: true
     }
   })
 
@@ -307,8 +308,8 @@ app.whenReady().then(() => {
       "script-src 'self' 'unsafe-eval' https://apis.google.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com https://omnishop.quadkore.app https://www.gstatic.com https://www.gstatic.com/generate_204 https://*.api.sanity.io https://cdn.sanity.io",
-      "frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://omnishop.quadkore.app",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com https://omnishop.quadkore.app https://www.gstatic.com https://www.gstatic.com/generate_204 https://*.api.sanity.io https://cdn.sanity.io https://whst2a2j.apicdn.sanity.io",
+      "frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://omnishop.quadkore.app https://mail.google.com https://www.messenger.com",
       "worker-src 'self' blob:"
     ].join('; ')
 
@@ -350,6 +351,24 @@ app.whenReady().then(() => {
   // Debug — open native DevTools for the main window
   ipcMain.handle('debug:open-devtools', () => {
     BrowserWindow.getAllWindows()[0]?.webContents.openDevTools()
+  })
+
+  // Get available displays
+  ipcMain.handle('get-displays', () => {
+    return screen.getAllDisplays()
+  })
+
+  // Set window to specific display and mode
+  ipcMain.on('set-window-display', (_, displayId: number) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    const display = screen.getAllDisplays().find((d) => d.id === displayId)
+
+    if (win && display) {
+      const { x, y } = display.bounds
+      win.setPosition(x, y)
+      // When moving between displays, ensure we're fullscreen on the target
+      win.setFullScreen(true)
+    }
   })
 
   ipcMain.on('update-display', (_, config: { mode: string; width?: number; height?: number }) => {

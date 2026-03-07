@@ -3,6 +3,7 @@ import { ShoppingCart, Search, Save, TrendingUp, TrendingDown, Minus } from 'luc
 
 import { useProductStore } from '@/store/useProductStore'
 import { useCategoryStore } from '@/store/useCategoryStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
@@ -14,8 +15,11 @@ function formatPrice(n: number): string {
 }
 
 export default function PriceListPage(): React.JSX.Element {
+  const { profile } = useAuthStore()
   const { products, loading, bulkPrices } = useProductStore()
   const { categories } = useCategoryStore()
+
+  const isMember = profile?.storeRole === 'member'
 
   // pending: productId → new price string (raw input)
   const [pending, setPending] = useState<Record<string, string>>({})
@@ -81,18 +85,22 @@ export default function PriceListPage(): React.JSX.Element {
             Price List
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Bulk-edit prices for all your products in one place.
+            {isMember
+              ? 'View current prices for all products.'
+              : 'Bulk-edit prices for all your products in one place.'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {saveSuccess && (
-            <span className="text-xs text-green-400 font-medium">Prices updated!</span>
-          )}
-          <Button onClick={handleSave} disabled={dirtyCount === 0 || saving} className="gap-2">
-            <Save className="size-4" />
-            {saving ? 'Saving…' : `Save Changes${dirtyCount > 0 ? ` (${dirtyCount})` : ''}`}
-          </Button>
-        </div>
+        {!isMember && (
+          <div className="flex items-center gap-3">
+            {saveSuccess && (
+              <span className="text-xs text-green-400 font-medium">Prices updated!</span>
+            )}
+            <Button onClick={handleSave} disabled={dirtyCount === 0 || saving} className="gap-2">
+              <Save className="size-4" />
+              {saving ? 'Saving…' : `Save Changes${dirtyCount > 0 ? ` (${dirtyCount})` : ''}`}
+            </Button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -182,22 +190,30 @@ export default function PriceListPage(): React.JSX.Element {
 
                       {/* Price input */}
                       <div>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={inputVal}
-                          onChange={(e) => handleChange(product.id, e.target.value)}
-                          className={cn(
-                            'w-full h-8 text-sm',
-                            isDirty && 'border-primary ring-1 ring-primary/30'
-                          )}
-                        />
+                        {isMember ? (
+                          <div className="flex items-center h-8 px-3 text-sm font-medium">
+                            ₱{formatPrice(product.price)}
+                          </div>
+                        ) : (
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={inputVal}
+                            onChange={(e) => handleChange(product.id, e.target.value)}
+                            className={cn(
+                              'w-full h-8 text-sm',
+                              isDirty && 'border-primary ring-1 ring-primary/30'
+                            )}
+                          />
+                        )}
                       </div>
 
                       {/* Diff indicator */}
                       <div className="flex items-center gap-1 text-xs font-medium">
-                        {diff === null || diff === 0 ? (
+                        {isMember ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : diff === null || diff === 0 ? (
                           <Minus className="size-3 text-muted-foreground" />
                         ) : diff > 0 ? (
                           <span className="flex items-center gap-1 text-green-400">
