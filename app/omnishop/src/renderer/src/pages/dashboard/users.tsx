@@ -87,6 +87,10 @@ const STATUS_CONFIG: Record<UserProfile['status'], { label: string; className: s
     className:
       'border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
   },
+  onboarding: {
+    label: 'Onboarding',
+    className: 'border-blue-500/40 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+  },
   rejected: {
     label: 'Suspended',
     className: 'border-red-500/40 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'

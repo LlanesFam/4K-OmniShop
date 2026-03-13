@@ -34,7 +34,7 @@ export default function GmailPage(): React.JSX.Element {
           src="https://mail.google.com"
           partition={user ? `persist:${user.uid}-gmail` : 'persist:guest-gmail'}
           className="absolute inset-0 w-full h-full"
-          allowpopups="true"
+          allowpopups
         />
       </div>
     </div>

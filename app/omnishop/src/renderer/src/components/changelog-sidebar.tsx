@@ -61,8 +61,12 @@ export interface ChangelogCategory {
 
 export function ChangelogSidebar({
   categories = data.navMain,
+  latestVersion,
   ...props
-}: React.ComponentProps<typeof Sidebar> & { categories?: ChangelogCategory[] }): React.JSX.Element {
+}: React.ComponentProps<typeof Sidebar> & {
+  categories?: ChangelogCategory[]
+  latestVersion?: string
+}): React.JSX.Element {
   return (
     <Sidebar {...props}>
       <SidebarHeader>
@@ -75,7 +79,7 @@ export function ChangelogSidebar({
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-medium">Changelog</span>
-                  <span className="">v1.1.4</span>
+                  <span className="">{latestVersion ? `v${latestVersion}` : '...'}</span>
                 </div>
               </a>
             </SidebarMenuButton>

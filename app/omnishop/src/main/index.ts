@@ -308,7 +308,7 @@ app.whenReady().then(() => {
       "script-src 'self' 'unsafe-eval' https://apis.google.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com https://omnishop.quadkore.app https://www.gstatic.com https://www.gstatic.com/generate_204 https://*.api.sanity.io https://cdn.sanity.io https://whst2a2j.apicdn.sanity.io",
+      "connect-src 'self' http://localhost:3000 https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebase.google.com https://*.firebaseapp.com https://api.cloudinary.com https://res.cloudinary.com https://omnishop.quadkore.app https://www.gstatic.com https://www.gstatic.com/generate_204 https://*.api.sanity.io https://cdn.sanity.io https://whst2a2j.apicdn.sanity.io",
       "frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://omnishop.quadkore.app https://mail.google.com https://www.messenger.com",
       "worker-src 'self' blob:"
     ].join('; ')

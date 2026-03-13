@@ -342,7 +342,7 @@ export default function ApprovalsPage(): React.JSX.Element {
       {/* Application Answers Dialog */}
       <Dialog open={!!appDialog} onOpenChange={(o) => !o && setAppDialog(null)}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
+          <DialogHeader className="pr-6">
             <DialogTitle className="flex items-center gap-2">
               <FileText className="size-4" />
               Application — {appDialog?.displayName}
@@ -352,14 +352,16 @@ export default function ApprovalsPage(): React.JSX.Element {
             </DialogDescription>
           </DialogHeader>
 
-          {appDialog?.onboardingAnswers ? (
-            <ApplicationAnswers answers={appDialog.onboardingAnswers} />
-          ) : (
-            <p className="text-sm text-muted-foreground py-2">
-              No application data available. This user may have registered before the onboarding
-              questionnaire was introduced.
-            </p>
-          )}
+          <div className="overflow-y-auto max-h-[60vh]">
+            {appDialog?.onboardingAnswers ? (
+              <ApplicationAnswers answers={appDialog.onboardingAnswers} />
+            ) : (
+              <p className="text-sm text-muted-foreground py-2">
+                No application data available. This user may have registered before the onboarding
+                questionnaire was introduced.
+              </p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
@@ -369,6 +371,8 @@ export default function ApprovalsPage(): React.JSX.Element {
 // ─── Application Answers ──────────────────────────────────────────────────────
 
 function ApplicationAnswers({ answers }: { answers: OnboardingAnswers }): React.JSX.Element {
+  const isUrl = (val: string): boolean => /^https?:\/\//i.test(val)
+
   const rows: { label: string; value: string | undefined }[] = [
     { label: "What's their store about?", value: answers.storeDescription },
     { label: 'Type of store', value: answers.storeType },
@@ -384,7 +388,22 @@ function ApplicationAnswers({ answers }: { answers: OnboardingAnswers }): React.
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {label}
             </p>
-            <p className="text-sm text-foreground break-words">{value}</p>
+            {isUrl(value) ? (
+              <a
+                href={value}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => {
+                  e.preventDefault()
+                  window.open(value, '_blank')
+                }}
+                className="text-sm text-primary break-all hover:underline underline-offset-4"
+              >
+                {value}
+              </a>
+            ) : (
+              <p className="text-sm text-foreground break-words">{value}</p>
+            )}
           </div>
         ) : null
       )}

@@ -4,7 +4,15 @@ import react from '@vitejs/plugin-react'
 import pkg from './package.json'
 
 export default defineConfig({
-  main: {},
+  main: {
+    build: {
+      // For some reason, electron-vite seems to have trouble resolving
+      // the electron dependency on its own.
+      rollupOptions: {
+        external: ['electron']
+      }
+    }
+  },
   preload: {},
   renderer: {
     define: {

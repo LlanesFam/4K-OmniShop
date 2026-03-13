@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { PortableText } from '@portabletext/react'
+import ReactMarkdown from 'react-markdown'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { ChangelogSidebar, type ChangelogCategory } from '@/components/changelog-sidebar'
 import {
@@ -10,18 +10,15 @@ import {
 } from '@/components/ui/breadcrumb'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { fetchChangelogs, type ChangelogDoc } from '@/lib/sanity'
+import { fetchChangelogs, type ChangelogDoc } from '@/lib/payload'
 import { cn } from '@/lib/utils'
 
 // ─── Tag badge ────────────────────────────────────────────────────────────────
 
 const TAG_STYLES: Record<string, string> = {
   feature: 'bg-blue-500/15 text-blue-400',
-  fix: 'bg-green-500/15 text-green-400',
-  ui: 'bg-purple-500/15 text-purple-400',
-  perf: 'bg-yellow-500/15 text-yellow-400',
-  security: 'bg-red-500/15 text-red-400',
-  breaking: 'bg-orange-500/15 text-orange-400',
+  bugfix: 'bg-green-500/15 text-green-400',
+  improvement: 'bg-purple-500/15 text-purple-400',
   internal: 'bg-muted text-muted-foreground'
 }
 
@@ -29,7 +26,7 @@ function TagBadge({ tag }: { tag: string }): React.JSX.Element {
   return (
     <span
       className={cn(
-        'rounded px-2 py-0.5 text-xs font-medium',
+        'rounded px-2 py-0.5 text-xs font-medium capitalize',
         TAG_STYLES[tag] ?? 'bg-muted text-muted-foreground'
       )}
     >
@@ -38,46 +35,25 @@ function TagBadge({ tag }: { tag: string }): React.JSX.Element {
   )
 }
 
-// ─── Portable Text components ─────────────────────────────────────────────────
+// ─── Markdown Components ──────────────────────────────────────────────────
 
-const ptComponents = {
-  block: {
-    normal: ({ children }: { children?: React.ReactNode }) => (
-      <p className="mb-3 leading-relaxed">{children}</p>
-    ),
-    h2: ({ children }: { children?: React.ReactNode }) => (
-      <h2 className="mt-6 mb-2 text-xl font-semibold">{children}</h2>
-    ),
-    h3: ({ children }: { children?: React.ReactNode }) => (
-      <h3 className="mt-4 mb-1.5 text-base font-semibold">{children}</h3>
-    ),
-    blockquote: ({ children }: { children?: React.ReactNode }) => (
-      <blockquote className="border-l-4 border-primary/40 pl-4 italic text-muted-foreground mb-3">
-        {children}
-      </blockquote>
-    )
-  },
-  marks: {
-    strong: ({ children }: { children?: React.ReactNode }) => (
-      <strong className="font-semibold">{children}</strong>
-    ),
-    em: ({ children }: { children?: React.ReactNode }) => <em>{children}</em>,
-    code: ({ children }: { children?: React.ReactNode }) => (
-      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{children}</code>
-    )
-  },
-  list: {
-    bullet: ({ children }: { children?: React.ReactNode }) => (
-      <ul className="mb-3 ml-4 list-disc space-y-1">{children}</ul>
-    ),
-    number: ({ children }: { children?: React.ReactNode }) => (
-      <ol className="mb-3 ml-4 list-decimal space-y-1">{children}</ol>
-    )
-  },
-  listItem: {
-    bullet: ({ children }: { children?: React.ReactNode }) => <li>{children}</li>,
-    number: ({ children }: { children?: React.ReactNode }) => <li>{children}</li>
-  }
+const markdownComponents: React.ComponentProps<typeof ReactMarkdown>['components'] = {
+  p: ({ children }) => <p className="mb-3 leading-relaxed">{children}</p>,
+  h2: ({ children }) => <h2 className="mt-6 mb-2 text-xl font-semibold">{children}</h2>,
+  h3: ({ children }) => <h3 className="mt-4 mb-1.5 text-base font-semibold">{children}</h3>,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-4 border-primary/40 pl-4 italic text-muted-foreground mb-3">
+      {children}
+    </blockquote>
+  ),
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em>{children}</em>,
+  code: ({ children }) => (
+    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{children}</code>
+  ),
+  ul: ({ children }) => <ul className="mb-3 ml-4 list-disc space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-3 ml-4 list-decimal space-y-1">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>
 }
 
 // ─── Anchor id helper ─────────────────────────────────────────────────────────
@@ -109,7 +85,7 @@ export default function ChangelogPage(): React.JSX.Element {
         ])
       })
       .catch((err) => {
-        console.error('[Changelog] Sanity fetch failed', err)
+        console.error('[Changelog] Payload fetch failed', err)
         setError('Could not load changelog. Check your connection.')
       })
       .finally(() => setLoading(false))
@@ -117,7 +93,10 @@ export default function ChangelogPage(): React.JSX.Element {
 
   return (
     <SidebarProvider>
-      <ChangelogSidebar categories={categories.length > 0 ? categories : undefined} />
+      <ChangelogSidebar
+        categories={categories.length > 0 ? categories : undefined}
+        latestVersion={entries[0]?.version}
+      />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
@@ -158,7 +137,7 @@ export default function ChangelogPage(): React.JSX.Element {
               ) : (
                 entries.map((entry) => (
                   <div
-                    key={entry._id}
+                    key={entry.id}
                     id={versionAnchor(entry.version)}
                     className="scroll-mt-20 border-b pb-12 last:border-0"
                   >
@@ -173,30 +152,25 @@ export default function ChangelogPage(): React.JSX.Element {
                         )}
                       </h2>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {entry.publishedAt
-                          ? new Date(entry.publishedAt).toLocaleDateString('en-US', {
+                        {entry.date
+                          ? new Date(entry.date).toLocaleDateString('en-US', {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'
                             })
                           : ''}
                       </p>
-                      {entry.summary && (
-                        <p className="mt-2 text-sm text-muted-foreground italic">{entry.summary}</p>
-                      )}
-                      {entry.tags?.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {entry.tags.map((tag) => (
-                            <TagBadge key={tag} tag={tag} />
-                          ))}
-                        </div>
-                      )}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <TagBadge tag={entry.type} />
+                      </div>
                     </div>
 
                     {/* Rich-text notes */}
-                    {entry.notes?.length > 0 ? (
+                    {entry.content ? (
                       <div className="text-sm">
-                        <PortableText value={entry.notes} components={ptComponents} />
+                        <ReactMarkdown components={markdownComponents}>
+                          {entry.content}
+                        </ReactMarkdown>
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">No notes provided.</p>

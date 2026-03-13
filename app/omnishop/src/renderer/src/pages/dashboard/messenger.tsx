@@ -33,7 +33,7 @@ export default function MessengerPage(): React.JSX.Element {
           src="https://www.messenger.com"
           partition={user ? `persist:${user.uid}-messenger` : 'persist:guest-messenger'}
           className="absolute inset-0 w-full h-full"
-          allowpopups="true"
+          allowpopups
         />
       </div>
     </div>
